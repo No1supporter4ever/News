@@ -1,0 +1,1191 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>新聞閱讀與生字庫 (News Reader & Vocab Bank)</title>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#f5f3ff',
+              100: '#ede9fe',
+              200: '#ddd6fe',
+              500: '#8b5cf6',
+              600: '#7c3aed',
+              700: '#6d28d9',
+              800: '#5b21b6',
+              900: '#4c1d95',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <!-- Tesseract.js for OCR -->
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
+
+  <!-- QRCode.js for generating QR codes -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+  <!-- HTML5-QRCode for scanning QR codes -->
+  <script src="https://unpkg.com/html5-qrcode"></script>
+
+  <!-- pinyin-pro for Mandarin Pinyin with tone marks -->
+  <script src="https://cdn.jsdelivr.net/npm/pinyin-pro@3.18.3/dist/index.js"></script>
+
+  <!-- OpenCC JS for Simplified to Traditional Chinese conversion -->
+  <script src="https://cdn.jsdelivr.net/npm/opencc-js@1.0.5/dist/umd/cn2hk.js"></script>
+
+  <style>
+    body {
+      touch-action: manipulation;
+      user-select: none;
+      -webkit-user-select: none;
+      background-color: #f8fafc;
+    }
+    .selectable-text {
+      user-select: text !important;
+      -webkit-user-select: text !important;
+    }
+    /* Rainbow Highlighting Classes */
+    mark.hl-yellow  { background-color: #fef08a; color: #854d0e; padding: 2px 4px; border-radius: 4px; }
+    mark.hl-green   { background-color: #bbf7d0; color: #166534; padding: 2px 4px; border-radius: 4px; }
+    mark.hl-cyan    { background-color: #a5f3fc; color: #155e75; padding: 2px 4px; border-radius: 4px; }
+    mark.hl-blue    { background-color: #bfdbfe; color: #1e40af; padding: 2px 4px; border-radius: 4px; }
+    mark.hl-purple  { background-color: #e9d5ff; color: #6b21a8; padding: 2px 4px; border-radius: 4px; }
+    mark.hl-pink    { background-color: #fbcfe8; color: #9d174d; padding: 2px 4px; border-radius: 4px; }
+    mark.hl-orange  { background-color: #fed7aa; color: #9a3412; padding: 2px 4px; border-radius: 4px; }
+    mark.hl-red     { background-color: #fecaca; color: #991b1b; padding: 2px 4px; border-radius: 4px; }
+
+    /* Custom Scrollbars */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body class="text-slate-800 font-sans min-h-screen flex flex-col">
+
+  <!-- Top Header Navigation -->
+  <header class="bg-brand-700 text-white shadow-md sticky top-0 z-30">
+    <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <div class="bg-white text-brand-700 p-2 rounded-xl shadow-inner font-bold text-xl">
+          <i class="fa-solid fa-newspaper"></i>
+        </div>
+        <div>
+          <h1 class="font-bold text-lg md:text-xl leading-tight">兒童新聞學習閱讀器</h1>
+          <p class="text-xs text-brand-200">News Reader & Vocab Bank</p>
+        </div>
+      </div>
+
+      <div class="flex items-center space-x-2">
+        <!-- Scan QR Button -->
+        <button onclick="openScannerModal()" class="px-3 py-2 bg-brand-800 hover:bg-brand-900 rounded-lg text-sm flex items-center space-x-1 border border-brand-500 shadow-sm transition">
+          <i class="fa-solid fa-qrcode"></i>
+          <span class="hidden sm:inline">掃瞄 QR Code</span>
+        </button>
+
+        <!-- Navigation Tabs -->
+        <nav class="flex bg-brand-800 p-1 rounded-xl">
+          <button id="nav-news-btn" onclick="switchTab('news')" class="px-3 py-1.5 rounded-lg text-sm font-medium transition bg-white text-brand-800 shadow">
+            <i class="fa-solid fa-book-open mr-1"></i>新聞列表
+          </button>
+          <button id="nav-words-btn" onclick="switchTab('words')" class="px-3 py-1.5 rounded-lg text-sm font-medium transition text-brand-200 hover:text-white">
+            <i class="fa-solid fa-bookmark mr-1"></i>生字庫 <span id="vocab-badge-count" class="bg-brand-500 text-white text-xs px-1.5 py-0.5 rounded-full ml-1">0</span>
+          </button>
+        </nav>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="flex-1 max-w-6xl w-full mx-auto p-4 md:p-6">
+
+    <!-- TAB 1: NEWS LIST & READER -->
+    <section id="tab-news" class="space-y-6">
+      
+      <!-- Top Actions Bar -->
+      <div class="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3 bg-white p-4 rounded-2xl shadow-sm border border-slate-200">
+        <!-- Filters -->
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">篩選：</span>
+          <select id="filter-lang" onchange="renderNewsList()" class="bg-slate-100 text-sm rounded-lg px-3 py-2 border border-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500">
+            <option value="all">全部語言 (All)</option>
+            <option value="zh">繁體中文 (Chinese)</option>
+            <option value="en">英文 (English)</option>
+          </select>
+
+          <select id="filter-cat" onchange="renderNewsList()" class="bg-slate-100 text-sm rounded-lg px-3 py-2 border border-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500">
+            <option value="all">全部分類 (All)</option>
+          </select>
+
+          <select id="filter-read" onchange="renderNewsList()" class="bg-slate-100 text-sm rounded-lg px-3 py-2 border border-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500">
+            <option value="all">全部狀態 (Status)</option>
+            <option value="unread">未閱讀 (Unread)</option>
+            <option value="read">已閱讀 (Read)</option>
+          </select>
+        </div>
+
+        <!-- Add News Button -->
+        <button onclick="openUploadModal()" class="bg-brand-600 hover:bg-brand-700 text-white font-medium px-4 py-2 rounded-xl text-sm flex items-center justify-center space-x-2 shadow-sm transition">
+          <i class="fa-solid fa-plus"></i>
+          <span>新增新聞 / 上傳報紙照片</span>
+        </button>
+      </div>
+
+      <!-- News Cards Grid -->
+      <div id="news-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+        <!-- News items rendered dynamically -->
+      </div>
+    </section>
+
+    <!-- TAB 2: VOCABULARY & PHRASE BANK -->
+    <section id="tab-words" class="hidden space-y-6">
+      <div class="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+        
+        <!-- Header & Category Switch -->
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-4 border-b border-slate-100">
+          <div>
+            <h2 class="text-xl font-bold text-slate-800">生字與短語庫 (Vocabulary & Phrases)</h2>
+            <p class="text-xs text-slate-500">複習已儲存的單字與短語，提供廣東話及普通話發音</p>
+          </div>
+
+          <!-- Type Switch (Vocab vs Phrase) -->
+          <div class="flex bg-slate-100 p-1 rounded-xl self-start">
+            <button id="word-type-vocab" onclick="switchWordType('vocab')" class="px-4 py-1.5 rounded-lg text-sm font-semibold transition bg-white text-brand-700 shadow">
+              單字 (Vocab)
+            </button>
+            <button id="word-type-phrase" onclick="switchWordType('phrase')" class="px-4 py-1.5 rounded-lg text-sm font-semibold transition text-slate-600 hover:text-slate-900">
+              短語 (Phrases)
+            </button>
+          </div>
+        </div>
+
+        <!-- Sub-Tabs: Mastery Status (In Progress vs Mastered) -->
+        <div class="flex items-center justify-between gap-2">
+          <div class="flex space-x-2">
+            <button id="status-tab-learning" onclick="switchMasteryStatus('learning')" class="px-3 py-1.5 rounded-lg text-sm font-medium bg-brand-100 text-brand-800 border border-brand-200">
+              <i class="fa-solid fa-spinner mr-1"></i>學習中 (<span id="count-learning">0</span>)
+            </button>
+            <button id="status-tab-mastered" onclick="switchMasteryStatus('mastered')" class="px-3 py-1.5 rounded-lg text-sm font-medium bg-slate-100 text-slate-600 hover:bg-slate-200">
+              <i class="fa-solid fa-circle-check text-green-600 mr-1"></i>已學會 (<span id="count-mastered">0</span>)
+            </button>
+          </div>
+
+          <!-- Filter language -->
+          <select id="words-filter-lang" onchange="renderWordBank()" class="bg-slate-100 text-xs rounded-lg px-2.5 py-1.5 border border-slate-200">
+            <option value="all">全部語言</option>
+            <option value="zh">中文</option>
+            <option value="en">英文</option>
+          </select>
+        </div>
+
+        <!-- Word List Container -->
+        <div id="words-list" class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+          <!-- Dynamically rendered word cards -->
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- MODAL 1: ADD / UPLOAD NEWS -->
+  <div id="upload-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-150">
+      
+      <!-- Modal Header -->
+      <div class="p-4 md:p-5 bg-brand-700 text-white flex justify-between items-center">
+        <h3 class="font-bold text-lg flex items-center gap-2">
+          <i class="fa-solid fa-file-circle-plus"></i>
+          新增新聞文章 / OCR 照片掃瞄
+        </h3>
+        <button onclick="closeUploadModal()" class="text-white/80 hover:text-white p-1 rounded-lg">
+          <i class="fa-solid fa-xmark text-xl"></i>
+        </button>
+      </div>
+
+      <!-- Modal Body -->
+      <div class="p-5 overflow-y-auto flex-1 space-y-4">
+        
+        <!-- Language & Category Input -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-bold text-slate-600 mb-1">文章語言 (Language)</label>
+            <select id="input-news-lang" class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-sm focus:ring-2 focus:ring-brand-500">
+              <option value="zh">繁體中文 (Traditional Chinese)</option>
+              <option value="en">英文 (English)</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-600 mb-1">新聞分類 (Category)</label>
+            <div class="flex gap-2">
+              <input id="input-news-cat" type="text" list="existing-categories" placeholder="例：科學、生活、體育" class="flex-1 bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-sm focus:ring-2 focus:ring-brand-500">
+              <datalist id="existing-categories"></datalist>
+            </div>
+          </div>
+        </div>
+
+        <!-- News Title -->
+        <div>
+          <label class="block text-xs font-bold text-slate-600 mb-1">新聞標題 (Title)</label>
+          <input id="input-news-title" type="text" placeholder="請輸入新聞標題..." class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-sm focus:ring-2 focus:ring-brand-500">
+        </div>
+
+        <!-- Image OCR Upload Box -->
+        <div class="border-2 border-dashed border-brand-200 bg-brand-50/50 rounded-2xl p-4 text-center">
+          <div class="flex flex-col items-center justify-center space-y-2">
+            <i class="fa-solid fa-camera-retro text-brand-500 text-3xl"></i>
+            <span class="text-xs font-semibold text-slate-600">上傳報紙/打印照片自動識別文字 (OCR)</span>
+            <input type="file" id="ocr-file-input" accept="image/*" class="hidden" onchange="handleImageOCR(event)">
+            <button onclick="document.getElementById('ocr-file-input').click()" class="bg-brand-600 hover:bg-brand-700 text-white text-xs px-4 py-2 rounded-xl shadow-sm transition">
+              <i class="fa-solid fa-upload mr-1"></i>選擇照片或拍照
+            </button>
+          </div>
+
+          <!-- OCR Progress Bar -->
+          <div id="ocr-status" class="hidden mt-3 text-xs text-brand-700 font-medium space-y-1">
+            <p id="ocr-status-text">準備識別文字...</p>
+            <div class="w-full bg-brand-200 rounded-full h-2 overflow-hidden">
+              <div id="ocr-progress" class="bg-brand-600 h-2 w-0 transition-all duration-200"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Content Area -->
+        <div>
+          <label class="block text-xs font-bold text-slate-600 mb-1">新聞內文 (Content)</label>
+          <textarea id="input-news-content" rows="8" placeholder="在此貼上、編輯或確認 OCR 識別出的新聞內文..." class="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-sm focus:ring-2 focus:ring-brand-500 leading-relaxed"></textarea>
+        </div>
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="p-4 border-t border-slate-100 bg-slate-50 flex justify-end space-x-3">
+        <button onclick="closeUploadModal()" class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-200">取消</button>
+        <button onclick="saveNewArticle()" class="px-5 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-xs font-bold shadow-sm transition">
+          儲存新聞
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 2: READER VIEW (READING ARTICLE) -->
+  <div id="reader-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-2 sm:p-4 hidden">
+    <div class="bg-white rounded-3xl max-w-4xl w-full h-[95vh] flex flex-col shadow-2xl overflow-hidden">
+      
+      <!-- Reader Header -->
+      <div class="p-4 bg-brand-700 text-white flex items-center justify-between">
+        <div class="flex items-center space-x-3 truncate">
+          <span id="reader-lang-badge" class="px-2 py-0.5 bg-brand-800 text-brand-200 rounded text-xs font-bold">ZH</span>
+          <h3 id="reader-article-title" class="font-bold text-base md:text-lg truncate">新聞標題</h3>
+        </div>
+
+        <div class="flex items-center space-x-2">
+          <!-- Text size adjustment -->
+          <button onclick="changeFontSize(-2)" class="p-1.5 bg-brand-800 hover:bg-brand-900 rounded-lg text-xs" title="縮小字體">A-</button>
+          <button onclick="changeFontSize(2)" class="p-1.5 bg-brand-800 hover:bg-brand-900 rounded-lg text-xs" title="放大字體">A+</button>
+          
+          <button onclick="closeReaderModal()" class="text-white/80 hover:text-white p-1 rounded-lg ml-2">
+            <i class="fa-solid fa-xmark text-xl"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Reader Controls Subbar -->
+      <div class="bg-brand-50 border-b border-brand-100 px-4 py-2 flex flex-wrap items-center justify-between text-xs gap-2">
+        <div class="flex items-center space-x-2">
+          <span id="reader-cat-badge" class="bg-white px-2 py-1 rounded border border-brand-200 text-brand-800 font-semibold">分類</span>
+          <span id="reader-date" class="text-slate-500">日期</span>
+        </div>
+
+        <!-- Palette Selector for Highlighting -->
+        <div class="flex items-center space-x-1.5 bg-white px-3 py-1 rounded-full border border-slate-200 shadow-sm">
+          <span class="text-slate-500 font-semibold mr-1">劃線螢光筆顏色:</span>
+          <button onclick="setSelectedColor('yellow')" class="w-5 h-5 rounded-full bg-yellow-300 ring-2 ring-offset-1 ring-yellow-500 hover:scale-110 transition" id="color-btn-yellow"></button>
+          <button onclick="setSelectedColor('green')" class="w-5 h-5 rounded-full bg-green-300 hover:scale-110 transition" id="color-btn-green"></button>
+          <button onclick="setSelectedColor('cyan')" class="w-5 h-5 rounded-full bg-cyan-300 hover:scale-110 transition" id="color-btn-cyan"></button>
+          <button onclick="setSelectedColor('blue')" class="w-5 h-5 rounded-full bg-blue-300 hover:scale-110 transition" id="color-btn-blue"></button>
+          <button onclick="setSelectedColor('purple')" class="w-5 h-5 rounded-full bg-purple-300 hover:scale-110 transition" id="color-btn-purple"></button>
+          <button onclick="setSelectedColor('pink')" class="w-5 h-5 rounded-full bg-pink-300 hover:scale-110 transition" id="color-btn-pink"></button>
+          <button onclick="setSelectedColor('orange')" class="w-5 h-5 rounded-full bg-orange-300 hover:scale-110 transition" id="color-btn-orange"></button>
+          <button onclick="setSelectedColor('red')" class="w-5 h-5 rounded-full bg-red-300 hover:scale-110 transition" id="color-btn-red"></button>
+        </div>
+      </div>
+
+      <!-- Article Content Body -->
+      <div id="reader-content-body" class="p-6 overflow-y-auto flex-1 selectable-text leading-relaxed text-slate-800 text-lg space-y-4 font-sans">
+        <!-- Content dynamically rendered -->
+      </div>
+
+      <!-- Action Footer Toolbar -->
+      <div class="p-4 border-t border-slate-200 bg-white flex justify-between items-center">
+        <button id="toggle-read-status-btn" onclick="toggleReadStatusCurrent()" class="px-4 py-2 rounded-xl text-xs font-bold transition flex items-center space-x-2 bg-slate-100 text-slate-700 hover:bg-slate-200">
+          <i class="fa-regular fa-circle-check"></i>
+          <span>標記為「已閱讀」</span>
+        </button>
+
+        <span class="text-xs text-slate-400">提示：在文章中選取任何單字或句子即可儲存至生字庫</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 3: HIGHLIGHT & SAVE VOCAB / PHRASE POPUP -->
+  <div id="highlight-modal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-3xl max-w-md w-full p-5 shadow-2xl space-y-4 border border-brand-100 animate-in fade-in zoom-in duration-150">
+      
+      <div class="flex justify-between items-start">
+        <div>
+          <span id="hl-modal-type-tag" class="text-[10px] font-bold uppercase px-2 py-0.5 bg-brand-100 text-brand-800 rounded-full">單字 (Vocab)</span>
+          <h4 id="hl-selected-text" class="text-2xl font-black text-slate-900 mt-1 leading-tight">Selected Word</h4>
+        </div>
+        <button onclick="closeHighlightModal()" class="text-slate-400 hover:text-slate-600">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <!-- Auto Generated Phonetics / Audio controls -->
+      <div id="hl-audio-bar" class="flex items-center justify-between bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+        <div class="flex items-center space-x-2">
+          <span id="hl-pinyin-display" class="text-sm font-semibold text-brand-700">pīnyīn</span>
+        </div>
+        <div class="flex items-center space-x-2" id="hl-audio-buttons">
+          <!-- Audio Play buttons rendered dynamically -->
+        </div>
+      </div>
+
+      <!-- Definition Box -->
+      <div class="space-y-3">
+        <div>
+          <label class="block text-xs font-bold text-slate-600 mb-1">解釋 / 意思 (Definition)</label>
+          <textarea id="hl-definition" rows="2" placeholder="自動檢索或自行輸入意思..." class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-sm focus:ring-2 focus:ring-brand-500"></textarea>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-600 mb-1">備註 / 例句 (Notes)</label>
+          <input id="hl-notes" type="text" placeholder="可選：記錄例句或特別說明" class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-sm focus:ring-2 focus:ring-brand-500">
+        </div>
+      </div>
+
+      <!-- Save Actions -->
+      <div class="grid grid-cols-2 gap-3 pt-2">
+        <button onclick="saveHighlightedItem('vocab')" class="bg-brand-600 hover:bg-brand-700 text-white font-bold py-2.5 rounded-xl text-xs shadow-sm transition flex items-center justify-center space-x-1">
+          <i class="fa-solid fa-bookmark"></i>
+          <span>儲存為「單字」</span>
+        </button>
+        <button onclick="saveHighlightedItem('phrase')" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 rounded-xl text-xs shadow-sm transition flex items-center justify-center space-x-1">
+          <i class="fa-solid fa-[#]"></i>
+          <span>儲存為「短語」</span>
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- MODAL 4: SHARE QR CODE -->
+  <div id="qr-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl text-center space-y-4">
+      <div class="flex justify-between items-center">
+        <h3 class="font-bold text-lg text-slate-800">分享新聞 QR Code</h3>
+        <button onclick="closeQRModal()" class="text-slate-400 hover:text-slate-600">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <p class="text-xs text-slate-500">請用 iPad 開啟本 App 並點擊「掃瞄 QR Code」來匯入此文章</p>
+
+      <!-- QR Code Container -->
+      <div class="flex justify-center p-4 bg-slate-50 rounded-2xl border border-slate-200">
+        <div id="qrcode-container"></div>
+      </div>
+
+      <div class="space-y-2">
+        <button onclick="copyShareLink()" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold py-2.5 rounded-xl transition flex items-center justify-center space-x-2">
+          <i class="fa-solid fa-link"></i>
+          <span>複製分享連結 (Copy Link)</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 5: QR SCANNER -->
+  <div id="scanner-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-3xl max-w-md w-full p-5 shadow-2xl space-y-4">
+      <div class="flex justify-between items-center">
+        <h3 class="font-bold text-lg text-slate-800 flex items-center gap-2">
+          <i class="fa-solid fa-camera"></i>
+          掃瞄 QR Code 匯入新聞
+        </h3>
+        <button onclick="closeScannerModal()" class="text-slate-400 hover:text-slate-600">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <!-- Camera Feed area -->
+      <div class="overflow-hidden rounded-2xl bg-black aspect-square flex items-center justify-center">
+        <div id="qr-reader" class="w-full"></div>
+      </div>
+
+      <p class="text-xs text-slate-500 text-center">將鏡頭對準手機上的新聞 QR Code 即可自動匯入</p>
+    </div>
+  </div>
+
+
+  <!-- APP JAVASCRIPT LOGIC -->
+  <script>
+    // --- STATE MANAGEMENT ---
+    let articles = [];
+    let vocabList = [];
+    let currentArticleId = null;
+    let selectedColor = 'yellow';
+    let currentReaderFontSize = 18;
+    let openCCConverter = null;
+    let html5QrScanner = null;
+
+    // Temporary selection state
+    let activeSelectionInfo = {
+      text: '',
+      range: null,
+      lang: 'en'
+    };
+
+    // Filters & Active Tabs State
+    let activeTab = 'news'; // 'news' or 'words'
+    let wordBankType = 'vocab'; // 'vocab' or 'phrase'
+    let wordBankMastery = 'learning'; // 'learning' or 'mastered'
+
+    // Sample Bilingual Data
+    const sampleArticles = [
+      {
+        id: 'sample-1',
+        title: '香港大熊貓雙胞胎健康成長 (Hong Kong Panda Twins Growing Well)',
+        lang: 'zh',
+        category: '動物樂園',
+        content: '香港海洋公園的大熊貓雙胞胎今日滿月，園方表示兩隻小熊貓身體狀況十分良好，體重急速增加。爸爸樂樂與媽媽盈盈亦獲專業團隊悉心照顧。許多市民都非常期待早日與這對可愛的熊貓寶寶見面。',
+        isRead: false,
+        createdAt: new Date().toISOString()
+      },
+      {
+        id: 'sample-2',
+        title: 'NASA Launch New Space Telescope (NASA 發射全新太空望遠鏡)',
+        lang: 'en',
+        category: '科學探索',
+        content: 'NASA successfully launched a new space telescope yesterday. The advanced satellite aims to explore distant planets and search for potential signs of extra-terrestrial life in deep space. Astronomers around the world expressed great excitement about this monumental achievement.',
+        isRead: false,
+        createdAt: new Date().toISOString()
+      }
+    ];
+
+    // Initialize App
+    window.addEventListener('DOMContentLoaded', () => {
+      // Initialize OpenCC (CN to HK converter)
+      if (typeof OpenCC !== 'undefined') {
+        openCCConverter = OpenCC.Converter({ from: 'cn', to: 'hk' });
+      }
+
+      loadData();
+      renderNewsList();
+      renderWordBank();
+      updateVocabBadge();
+      populateCategoryDropdown();
+
+      // Check URL params for shared article payload
+      checkUrlShareData();
+
+      // Attach text selection listener for Reader view
+      const readerBody = document.getElementById('reader-content-body');
+      readerBody.addEventListener('mouseup', handleTextSelection);
+      readerBody.addEventListener('touchend', () => setTimeout(handleTextSelection, 200));
+    });
+
+    // --- LOCAL STORAGE DATA MANAGERS ---
+    function loadData() {
+      const storedArticles = localStorage.getItem('app_news_articles');
+      const storedVocab = localStorage.getItem('app_vocab_bank');
+
+      if (storedArticles) {
+        articles = JSON.parse(storedArticles);
+      } else {
+        articles = sampleArticles;
+        saveArticles();
+      }
+
+      if (storedVocab) {
+        vocabList = JSON.parse(storedVocab);
+      } else {
+        vocabList = [];
+      }
+    }
+
+    function saveArticles() {
+      localStorage.setItem('app_news_articles', JSON.stringify(articles));
+      renderNewsList();
+      populateCategoryDropdown();
+    }
+
+    function saveVocab() {
+      localStorage.setItem('app_vocab_bank', JSON.stringify(vocabList));
+      renderWordBank();
+      updateVocabBadge();
+    }
+
+    function updateVocabBadge() {
+      const count = vocabList.length;
+      document.getElementById('vocab-badge-count').textContent = count;
+    }
+
+    // --- TAB SWITCHING ---
+    function switchTab(tab) {
+      activeTab = tab;
+      document.getElementById('tab-news').classList.toggle('hidden', tab !== 'news');
+      document.getElementById('tab-words').classList.toggle('hidden', tab !== 'words');
+
+      // Update button styles
+      const newsBtn = document.getElementById('nav-news-btn');
+      const wordsBtn = document.getElementById('nav-words-btn');
+
+      if (tab === 'news') {
+        newsBtn.className = "px-3 py-1.5 rounded-lg text-sm font-medium transition bg-white text-brand-800 shadow";
+        wordsBtn.className = "px-3 py-1.5 rounded-lg text-sm font-medium transition text-brand-200 hover:text-white";
+      } else {
+        wordsBtn.className = "px-3 py-1.5 rounded-lg text-sm font-medium transition bg-white text-brand-800 shadow";
+        newsBtn.className = "px-3 py-1.5 rounded-lg text-sm font-medium transition text-brand-200 hover:text-white";
+        renderWordBank();
+      }
+    }
+
+    // --- NEWS LIST & CATEGORIES ---
+    function populateCategoryDropdown() {
+      const categories = [...new Set(articles.map(a => a.category).filter(Boolean))];
+      const filterSelect = document.getElementById('filter-cat');
+      const datalist = document.getElementById('existing-categories');
+
+      filterSelect.innerHTML = '<option value="all">全部分類 (All)</option>';
+      datalist.innerHTML = '';
+
+      categories.forEach(cat => {
+        filterSelect.innerHTML += `<option value="${cat}">${cat}</option>`;
+        datalist.innerHTML += `<option value="${cat}">`;
+      });
+    }
+
+    function renderNewsList() {
+      const grid = document.getElementById('news-grid');
+      const langFilter = document.getElementById('filter-lang').value;
+      const catFilter = document.getElementById('filter-cat').value;
+      const readFilter = document.getElementById('filter-read').value;
+
+      const filtered = articles.filter(item => {
+        if (langFilter !== 'all' && item.lang !== langFilter) return false;
+        if (catFilter !== 'all' && item.category !== catFilter) return false;
+        if (readFilter === 'read' && !item.isRead) return false;
+        if (readFilter === 'unread' && item.isRead) return false;
+        return true;
+      });
+
+      if (filtered.length === 0) {
+        grid.innerHTML = `
+          <div class="col-span-full text-center py-12 bg-white rounded-2xl border border-slate-200">
+            <i class="fa-regular fa-newspaper text-4xl text-slate-300 mb-2"></i>
+            <p class="text-sm font-semibold text-slate-500">暫時沒有新聞文章</p>
+            <p class="text-xs text-slate-400 mt-1">點擊上方「新增新聞」或透過 QR Code 匯入新聞</p>
+          </div>
+        `;
+        return;
+      }
+
+      grid.innerHTML = filtered.map(item => `
+        <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200 hover:shadow-md transition flex flex-col justify-between space-y-4">
+          <div class="space-y-2">
+            <div class="flex items-center justify-between gap-2">
+              <span class="text-xs font-bold px-2 py-0.5 rounded ${item.lang === 'zh' ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'}">
+                ${item.lang === 'zh' ? '繁體中文' : 'English'}
+              </span>
+              <span class="text-xs px-2 py-0.5 rounded bg-slate-100 font-medium text-slate-600">
+                ${item.category || '未分類'}
+              </span>
+            </div>
+
+            <h3 class="font-bold text-slate-900 text-base line-clamp-2 leading-snug">${item.title}</h3>
+            <p class="text-xs text-slate-500 line-clamp-3 leading-relaxed">${item.content}</p>
+          </div>
+
+          <div class="pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
+            <!-- Read Badge -->
+            <button onclick="toggleReadStatus('${item.id}', event)" class="flex items-center space-x-1.5 font-medium px-2.5 py-1 rounded-lg transition ${item.isRead ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}">
+              <i class="fa-${item.isRead ? 'solid' : 'regular'} fa-circle-check"></i>
+              <span>${item.isRead ? '已閱讀' : '標記為已讀'}</span>
+            </button>
+
+            <div class="flex items-center space-x-2">
+              <!-- Share QR -->
+              <button onclick="openQRModal('${item.id}', event)" class="p-2 text-slate-400 hover:text-brand-600 rounded-lg hover:bg-slate-100 transition" title="分享 QR Code">
+                <i class="fa-solid fa-qrcode"></i>
+              </button>
+              
+              <!-- Delete -->
+              <button onclick="deleteArticle('${item.id}', event)" class="p-2 text-slate-400 hover:text-red-600 rounded-lg hover:bg-slate-100 transition" title="刪除">
+                <i class="fa-solid fa-trash-can"></i>
+              </button>
+
+              <!-- Read Article -->
+              <button onclick="openReader('${item.id}')" class="bg-brand-600 hover:bg-brand-700 text-white font-bold px-3 py-1.5 rounded-xl shadow-sm transition">
+                閱讀
+              </button>
+            </div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function toggleReadStatus(id, event) {
+      if (event) event.stopPropagation();
+      const article = articles.find(a => a.id === id);
+      if (article) {
+        article.isRead = !article.isRead;
+        saveArticles();
+      }
+    }
+
+    function toggleReadStatusCurrent() {
+      if (currentArticleId) {
+        const article = articles.find(a => a.id === currentArticleId);
+        if (article) {
+          article.isRead = !article.isRead;
+          saveArticles();
+          updateReaderStatusButton();
+        }
+      }
+    }
+
+    function updateReaderStatusButton() {
+      const btn = document.getElementById('toggle-read-status-btn');
+      const article = articles.find(a => a.id === currentArticleId);
+      if (article && article.isRead) {
+        btn.className = "px-4 py-2 rounded-xl text-xs font-bold transition flex items-center space-x-2 bg-green-100 text-green-700 border border-green-200";
+        btn.innerHTML = `<i class="fa-solid fa-circle-check"></i><span>已閱讀 (Read)</span>`;
+      } else {
+        btn.className = "px-4 py-2 rounded-xl text-xs font-bold transition flex items-center space-x-2 bg-slate-100 text-slate-700 hover:bg-slate-200";
+        btn.innerHTML = `<i class="fa-regular fa-circle-check"></i><span>標記為「已閱讀」</span>`;
+      }
+    }
+
+    function deleteArticle(id, event) {
+      if (event) event.stopPropagation();
+      if (confirm('確定要刪除這篇文章嗎？')) {
+        articles = articles.filter(a => a.id !== id);
+        saveArticles();
+      }
+    }
+
+    // --- OCR SCANNER LOGIC ---
+    async function handleImageOCR(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const langSelect = document.getElementById('input-news-lang').value;
+      const statusBox = document.getElementById('ocr-status');
+      const statusText = document.getElementById('ocr-status-text');
+      const progressBar = document.getElementById('ocr-progress');
+
+      statusBox.classList.remove('hidden');
+      statusText.textContent = '正在啟動 OCR 引擎...';
+      progressBar.style.width = '10%';
+
+      try {
+        const ocrLang = langSelect === 'zh' ? 'chi_tra' : 'eng';
+        const worker = await Tesseract.createWorker(ocrLang);
+
+        statusText.textContent = '正在辨識照片中的文字...';
+        progressBar.style.width = '50%';
+
+        const { data: { text } } = await worker.recognize(file);
+        await worker.terminate();
+
+        progressBar.style.width = '100%';
+        statusText.textContent = '文字識別完成！';
+
+        // Convert Simplified to Traditional if necessary
+        let finalContent = text;
+        if (langSelect === 'zh' && openCCConverter) {
+          finalContent = openCCConverter(text);
+        }
+
+        document.getElementById('input-news-content').value = finalContent;
+
+        setTimeout(() => {
+          statusBox.classList.add('hidden');
+        }, 2000);
+
+      } catch (error) {
+        console.error(error);
+        statusText.textContent = '識別失敗，請確認圖片清晰度。';
+        progressBar.style.width = '0%';
+      }
+    }
+
+    function openUploadModal() {
+      document.getElementById('input-news-title').value = '';
+      document.getElementById('input-news-content').value = '';
+      document.getElementById('input-news-cat').value = '';
+      document.getElementById('upload-modal').classList.remove('hidden');
+    }
+
+    function closeUploadModal() {
+      document.getElementById('upload-modal').classList.add('hidden');
+    }
+
+    function saveNewArticle() {
+      const title = document.getElementById('input-news-title').value.trim();
+      const content = document.getElementById('input-news-content').value.trim();
+      const lang = document.getElementById('input-news-lang').value;
+      const cat = document.getElementById('input-news-cat').value.trim() || '未分類';
+
+      if (!title || !content) {
+        alert('請填寫標題及新聞內文');
+        return;
+      }
+
+      const newArticle = {
+        id: 'news-' + Date.now(),
+        title: title,
+        content: content,
+        lang: lang,
+        category: cat,
+        isRead: false,
+        createdAt: new Date().toISOString()
+      };
+
+      articles.unshift(newArticle);
+      saveArticles();
+      closeUploadModal();
+    }
+
+    // --- READER MODAL & HIGHLIGHTING ---
+    function openReader(id) {
+      currentArticleId = id;
+      const article = articles.find(a => a.id === id);
+      if (!article) return;
+
+      document.getElementById('reader-article-title').textContent = article.title;
+      document.getElementById('reader-lang-badge').textContent = article.lang === 'zh' ? '繁中' : 'EN';
+      document.getElementById('reader-cat-badge').textContent = article.category;
+      document.getElementById('reader-date').textContent = new Date(article.createdAt).toLocaleDateString();
+
+      const body = document.getElementById('reader-content-body');
+      
+      // Render Content Paragraphs
+      const paragraphs = article.content.split('\n').filter(p => p.trim());
+      body.innerHTML = paragraphs.map(p => `<p class="mb-4">${p}</p>`).join('');
+
+      updateReaderStatusButton();
+      document.getElementById('reader-modal').classList.remove('hidden');
+    }
+
+    function closeReaderModal() {
+      document.getElementById('reader-modal').classList.add('hidden');
+      currentArticleId = null;
+    }
+
+    function changeFontSize(delta) {
+      currentReaderFontSize = Math.max(14, Math.min(32, currentReaderFontSize + delta));
+      document.getElementById('reader-content-body').style.fontSize = `${currentReaderFontSize}px`;
+    }
+
+    function setSelectedColor(color) {
+      selectedColor = color;
+      const colors = ['yellow', 'green', 'cyan', 'blue', 'purple', 'pink', 'orange', 'red'];
+      colors.forEach(c => {
+        const btn = document.getElementById(`color-btn-${c}`);
+        if (c === color) {
+          btn.className = `w-5 h-5 rounded-full bg-${c}-300 ring-2 ring-offset-1 ring-${c}-500 hover:scale-110 transition`;
+        } else {
+          btn.className = `w-5 h-5 rounded-full bg-${c}-300 hover:scale-110 transition`;
+        }
+      });
+    }
+
+    // --- SELECTION & HIGHLIGHT LOGIC ---
+    function handleTextSelection() {
+      const selection = window.getSelection();
+      if (!selection || selection.isCollapsed) return;
+
+      const text = selection.toString().trim();
+      if (!text || text.length === 0) return;
+
+      const range = selection.getRangeAt(0);
+      const article = articles.find(a => a.id === currentArticleId);
+      const lang = article ? article.lang : 'en';
+
+      activeSelectionInfo = {
+        text: text,
+        range: range.cloneRange(),
+        lang: lang
+      };
+
+      openHighlightModal(text, lang);
+    }
+
+    async function openHighlightModal(text, lang) {
+      document.getElementById('hl-selected-text').textContent = text;
+      document.getElementById('hl-modal-type-tag').textContent = text.split(' ').length > 2 ? '短語 (Phrase)' : '單字 (Vocab)';
+      document.getElementById('hl-notes').value = '';
+
+      const pinyinDisplay = document.getElementById('hl-pinyin-display');
+      const audioBtnContainer = document.getElementById('hl-audio-buttons');
+      const defInput = document.getElementById('hl-definition');
+
+      defInput.value = '正在查閱查詞典/翻譯...';
+
+      if (lang === 'zh') {
+        // Chinese Text Logic: Generate Pinyin and Audio
+        const py = typeof pinyinPro !== 'undefined' ? pinyinPro.pinyin(text, { toneType: 'symbol' }) : '';
+        pinyinDisplay.textContent = `拼音: ${py}`;
+
+        audioBtnContainer.innerHTML = `
+          <button onclick="speakText('${text}', 'zh-HK')" class="px-2.5 py-1 bg-brand-100 hover:bg-brand-200 text-brand-800 rounded-lg text-xs font-bold transition">
+            <i class="fa-solid fa-volume-high"></i> 廣東話
+          </button>
+          <button onclick="speakText('${text}', 'zh-CN')" class="px-2.5 py-1 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-lg text-xs font-bold transition">
+            <i class="fa-solid fa-volume-high"></i> 普通話
+          </button>
+        `;
+
+        // Fetch English Meaning
+        try {
+          const res = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(text)}`);
+          defInput.value = '';
+        } catch {
+          defInput.value = '';
+        }
+
+      } else {
+        // English Text Logic
+        pinyinDisplay.textContent = 'English Phonetics';
+
+        audioBtnContainer.innerHTML = `
+          <button onclick="speakText('${text}', 'en-US')" class="px-2.5 py-1 bg-brand-100 hover:bg-brand-200 text-brand-800 rounded-lg text-xs font-bold transition">
+            <i class="fa-solid fa-volume-high"></i> Read
+          </button>
+        `;
+
+        // Fetch Chinese Meaning via MyMemory Translation API
+        try {
+          const res = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=en|zh-HK`);
+          const data = await res.json();
+          let def = data.responseData.translatedText || '';
+          if (openCCConverter && def) def = openCCConverter(def);
+          defInput.value = def;
+        } catch {
+          defInput.value = '';
+        }
+      }
+
+      document.getElementById('highlight-modal').classList.remove('hidden');
+    }
+
+    function closeHighlightModal() {
+      document.getElementById('highlight-modal').classList.add('hidden');
+      window.getSelection().removeAllRanges();
+    }
+
+    function saveHighlightedItem(type) {
+      if (!activeSelectionInfo.text) return;
+
+      const word = activeSelectionInfo.text;
+      const lang = activeSelectionInfo.lang;
+      const def = document.getElementById('hl-definition').value.trim();
+      const notes = document.getElementById('hl-notes').value.trim();
+
+      const py = lang === 'zh' && typeof pinyinPro !== 'undefined' ? pinyinPro.pinyin(word, { toneType: 'symbol' }) : '';
+
+      const newItem = {
+        id: 'vocab-' + Date.now(),
+        text: word,
+        type: type, // 'vocab' or 'phrase'
+        lang: lang,
+        definition: def,
+        pinyin: py,
+        notes: notes,
+        color: selectedColor,
+        mastered: false,
+        createdAt: new Date().toISOString()
+      };
+
+      vocabList.unshift(newItem);
+      saveVocab();
+
+      // Apply Visual Highlight Mark inside Reader DOM
+      try {
+        const mark = document.createElement('mark');
+        mark.className = `hl-${selectedColor}`;
+        mark.textContent = word;
+        activeSelectionInfo.range.surroundContents(mark);
+      } catch (e) {
+        console.warn('Range surround fail, falling back:', e);
+      }
+
+      closeHighlightModal();
+    }
+
+    // --- SPEECH SYNTHESIS (VOICE AUDIO) ---
+    function speakText(text, langCode) {
+      if (!('speechSynthesis' in window)) {
+        alert('您的裝置不支援語音播放。');
+        return;
+      }
+
+      window.speechSynthesis.cancel(); // Stop current speech
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = langCode;
+
+      // Select specific voice if available
+      const voices = window.speechSynthesis.getVoices();
+      const targetVoice = voices.find(v => v.lang.includes(langCode) || v.lang === langCode);
+      if (targetVoice) utterance.voice = targetVoice;
+
+      window.speechSynthesis.speak(utterance);
+    }
+
+    // --- VOCABULARY BANK RENDERING ---
+    function switchWordType(type) {
+      wordBankType = type;
+      document.getElementById('word-type-vocab').className = type === 'vocab' 
+        ? "px-4 py-1.5 rounded-lg text-sm font-semibold transition bg-white text-brand-700 shadow"
+        : "px-4 py-1.5 rounded-lg text-sm font-semibold transition text-slate-600 hover:text-slate-900";
+      
+      document.getElementById('word-type-phrase').className = type === 'phrase'
+        ? "px-4 py-1.5 rounded-lg text-sm font-semibold transition bg-white text-brand-700 shadow"
+        : "px-4 py-1.5 rounded-lg text-sm font-semibold transition text-slate-600 hover:text-slate-900";
+
+      renderWordBank();
+    }
+
+    function switchMasteryStatus(status) {
+      wordBankMastery = status;
+      const btnLearning = document.getElementById('status-tab-learning');
+      const btnMastered = document.getElementById('status-tab-mastered');
+
+      if (status === 'learning') {
+        btnLearning.className = "px-3 py-1.5 rounded-lg text-sm font-medium bg-brand-100 text-brand-800 border border-brand-200";
+        btnMastered.className = "px-3 py-1.5 rounded-lg text-sm font-medium bg-slate-100 text-slate-600 hover:bg-slate-200";
+      } else {
+        btnMastered.className = "px-3 py-1.5 rounded-lg text-sm font-medium bg-green-100 text-green-800 border border-green-200";
+        btnLearning.className = "px-3 py-1.5 rounded-lg text-sm font-medium bg-slate-100 text-slate-600 hover:bg-slate-200";
+      }
+
+      renderWordBank();
+    }
+
+    function renderWordBank() {
+      const container = document.getElementById('words-list');
+      const langFilter = document.getElementById('words-filter-lang').value;
+
+      // Update counters
+      const learningCount = vocabList.filter(v => !v.mastered).length;
+      const masteredCount = vocabList.filter(v => v.mastered).length;
+      document.getElementById('count-learning').textContent = learningCount;
+      document.getElementById('count-mastered').textContent = masteredCount;
+
+      const filtered = vocabList.filter(item => {
+        if (item.type !== wordBankType) return false;
+        if (wordBankMastery === 'learning' && item.mastered) return false;
+        if (wordBankMastery === 'mastered' && !item.mastered) return false;
+        if (langFilter !== 'all' && item.lang !== langFilter) return false;
+        return true;
+      });
+
+      if (filtered.length === 0) {
+        container.innerHTML = `
+          <div class="col-span-full text-center py-10 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+            <i class="fa-solid fa-bookmark text-3xl text-slate-300 mb-2"></i>
+            <p class="text-sm font-semibold text-slate-500">沒有找到記錄</p>
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = filtered.map(item => `
+        <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between space-y-3">
+          <div>
+            <div class="flex items-start justify-between">
+              <div>
+                <span class="inline-block mark.hl-${item.color || 'yellow'} font-black text-lg text-slate-900 rounded px-1.5">
+                  ${item.text}
+                </span>
+                ${item.pinyin ? `<p class="text-xs font-semibold text-brand-600 mt-0.5">${item.pinyin}</p>` : ''}
+              </div>
+
+              <!-- Audio buttons -->
+              <div class="flex items-center space-x-1">
+                ${item.lang === 'zh' ? `
+                  <button onclick="speakText('${item.text}', 'zh-HK')" class="p-1.5 bg-brand-50 hover:bg-brand-100 text-brand-700 rounded-lg text-xs" title="廣東話發音">
+                    廣
+                  </button>
+                  <button onclick="speakText('${item.text}', 'zh-CN')" class="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs" title="普通話發音">
+                    普
+                  </button>
+                ` : `
+                  <button onclick="speakText('${item.text}', 'en-US')" class="p-1.5 bg-brand-50 hover:bg-brand-100 text-brand-700 rounded-lg text-xs" title="English Audio">
+                    <i class="fa-solid fa-volume-high"></i>
+                  </button>
+                `}
+              </div>
+            </div>
+
+            <!-- Definition -->
+            <p class="text-xs text-slate-700 font-medium mt-2 bg-slate-50 p-2 rounded-xl border border-slate-100">
+              ${item.definition || '未有定義'}
+            </p>
+
+            ${item.notes ? `<p class="text-xs text-slate-400 italic mt-1">備註: ${item.notes}</p>` : ''}
+          </div>
+
+          <!-- Bottom Footer -->
+          <div class="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
+            <button onclick="toggleWordMastered('${item.id}')" class="flex items-center space-x-1 font-semibold ${item.mastered ? 'text-green-600' : 'text-slate-400 hover:text-slate-600'}">
+              <i class="fa-${item.mastered ? 'solid' : 'regular'} fa-circle-check"></i>
+              <span>${item.mastered ? '已學會' : '標記為已學會'}</span>
+            </button>
+
+            <button onclick="deleteVocab('${item.id}')" class="text-slate-400 hover:text-red-600">
+              <i class="fa-solid fa-trash-can"></i>
+            </button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function toggleWordMastered(id) {
+      const item = vocabList.find(v => v.id === id);
+      if (item) {
+        item.mastered = !item.mastered;
+        saveVocab();
+      }
+    }
+
+    function deleteVocab(id) {
+      if (confirm('確定要刪除此生字嗎？')) {
+        vocabList = vocabList.filter(v => v.id !== id);
+        saveVocab();
+      }
+    }
+
+    // --- SHARE & QR CODE FUNCTIONS ---
+    function openQRModal(id, event) {
+      if (event) event.stopPropagation();
+      const article = articles.find(a => a.id === id);
+      if (!article) return;
+
+      const container = document.getElementById('qrcode-container');
+      container.innerHTML = '';
+
+      // Encode article object into JSON payload
+      const payload = encodeURIComponent(JSON.stringify(article));
+      const shareUrl = `${window.location.origin}${window.location.pathname}?import=${payload}`;
+
+      new QRCode(container, {
+        text: shareUrl,
+        width: 180,
+        height: 180,
+        colorDark: '#5b21b6',
+        colorLight: '#ffffff',
+        correctLevel: QRCode.CorrectLevel.L
+      });
+
+      window.currentShareUrl = shareUrl;
+      document.getElementById('qr-modal').classList.remove('hidden');
+    }
+
+    function closeQRModal() {
+      document.getElementById('qr-modal').classList.add('hidden');
+    }
+
+    function copyShareLink() {
+      if (window.currentShareUrl) {
+        navigator.clipboard.writeText(window.currentShareUrl);
+        alert('分享連結已複製！可透過 AirDrop / 訊息傳送給 iPad。');
+      }
+    }
+
+    // --- QR SCANNER LOGIC FOR IPAD ---
+    function openScannerModal() {
+      document.getElementById('scanner-modal').classList.remove('hidden');
+
+      html5QrScanner = new Html5Qrcode("qr-reader");
+      html5QrScanner.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: { width: 250, height: 250 } },
+        (decodedText) => {
+          // Success Callback
+          html5QrScanner.stop().then(() => {
+            closeScannerModal();
+            importArticleFromUrl(decodedText);
+          });
+        },
+        (errorMessage) => {
+          // Parse errors silently
+        }
+      ).catch(err => {
+        alert('無法開啟攝影機，請確保已授予 Safari 攝影機存取權限。');
+        closeScannerModal();
+      });
+    }
+
+    function closeScannerModal() {
+      if (html5QrScanner) {
+        html5QrScanner.stop().catch(() => {});
+      }
+      document.getElementById('scanner-modal').classList.add('hidden');
+    }
+
+    function checkUrlShareData() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const importData = urlParams.get('import');
+      if (importData) {
+        importArticleFromUrl(window.location.href);
+      }
+    }
+
+    function importArticleFromUrl(fullUrl) {
+      try {
+        const url = new URL(fullUrl);
+        const rawPayload = url.searchParams.get('import');
+        if (!rawPayload) return;
+
+        const articleObj = JSON.parse(decodeURIComponent(rawPayload));
+        
+        // Check if article already exists
+        const exists = articles.some(a => a.id === articleObj.id);
+        if (!exists) {
+          articles.unshift(articleObj);
+          saveArticles();
+          alert(`成功匯入新聞：「${articleObj.title}」！`);
+        } else {
+          alert('這篇新聞已經存在於您的列表中！');
+        }
+
+        // Clean up URL parameters
+        window.history.replaceState({}, document.title, window.location.pathname);
+
+      } catch (e) {
+        console.error(e);
+        alert('無法解析 QR Code 資料。');
+      }
+    }
+  </script>
+</body>
+</html>
