@@ -1,0 +1,1256 @@
+<!DOCTYPE html>
+<html lang="zh-Hant" class="h-full bg-purple-50/50">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>兒童新聞與詞彙庫 · Kids News Reader</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        purple: {
+                            50: '#f5f3ff', 100: '#ede9fe', 200: '#ddd6fe', 300: '#c4b5fd',
+                            400: '#a78bfa', 500: '#8b5cf6', 600: '#7c3aed', 700: '#6d28d9',
+                            800: '#5b21b6', 900: '#4c1d95',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- pinyin-pro (will fail gracefully if offline) -->
+    <script src="https://unpkg.com/pinyin-pro@3.18.3/dist/index.js"></script>
+    <style>
+        /* iOS safe area + custom scrollbar */
+        :root {
+            --sat: env(safe-area-inset-top);
+            --sab: env(safe-area-inset-bottom);
+        }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #f5f3ff; }
+        ::-webkit-scrollbar-thumb { background: #c4b5fd; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #8b5cf6; }
+
+        /* Rainbow Highlight Styles */
+        .hl-red    { background-color: #fecdd3; color: #9f1239; border-bottom: 2px solid #f43f5e; border-radius: 2px; }
+        .hl-orange { background-color: #ffedd5; color: #9a3412; border-bottom: 2px solid #f97316; border-radius: 2px; }
+        .hl-yellow { background-color: #fef08a; color: #854d0e; border-bottom: 2px solid #eab308; border-radius: 2px; }
+        .hl-green  { background-color: #bbf7d0; color: #166534; border-bottom: 2px solid #22c55e; border-radius: 2px; }
+        .hl-blue   { background-color: #bfdbfe; color: #1e40af; border-bottom: 2px solid #3b82f6; border-radius: 2px; }
+        .hl-purple { background-color: #e9d5ff; color: #6b21a8; border-bottom: 2px solid #a855f7; border-radius: 2px; }
+        .hl-pink   { background-color: #fbcfe8; color: #831843; border-bottom: 2px solid #ec4899; border-radius: 2px; }
+
+        .reader-text {
+            font-size: 1.18rem;
+            line-height: 2.35rem;
+            user-select: text;
+            -webkit-user-select: text;
+            /* allow selection on iOS – do NOT set touch-callout:none */
+        }
+        .no-select {
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        /* Larger colour buttons for touch */
+        .color-btn {
+            width: 32px;
+            height: 32px;
+            border-radius: 9999px;
+            border: 2px solid rgba(255,255,255,0.7);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+            transition: transform 0.15s;
+        }
+        .color-btn:active { transform: scale(1.15); }
+
+        /* Sticky adjustments for iOS */
+        .sticky-header {
+            position: -webkit-sticky;
+            position: sticky;
+            top: 0;
+            z-index: 30;
+        }
+        .sticky-nav {
+            position: -webkit-sticky;
+            position: sticky;
+            top: 60px;
+            z-index: 20;
+        }
+        .sticky-toolbar {
+            position: -webkit-sticky;
+            position: sticky;
+            top: 115px;
+            z-index: 15;
+        }
+
+        /* Prevent zoom on input focus (iOS) */
+        input, select, textarea { font-size: 16px !important; }
+    </style>
+</head>
+<body class="h-full flex flex-col font-sans text-slate-800 antialiased bg-purple-50/50" style="padding-bottom: var(--sab);">
+
+    <!-- TOP APP HEADER -->
+    <header class="sticky-header bg-gradient-to-r from-purple-800 via-purple-700 to-purple-600 text-white shadow-md">
+        <div class="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between" style="padding-top: max(12px, var(--sat));">
+            <div class="flex items-center space-x-3">
+                <div class="bg-white/20 p-2.5 rounded-xl backdrop-blur-md flex items-center justify-center">
+                    <i class="fa-solid fa-newspaper text-2xl text-yellow-300"></i>
+                </div>
+                <div>
+                    <h1 class="text-lg md:text-xl font-bold tracking-tight">兒童新聞與詞彙庫</h1>
+                    <p class="text-xs text-purple-200">Kids News Reader & Vocab Builder</p>
+                </div>
+            </div>
+            <button onclick="openAddModal()" class="bg-yellow-400 hover:bg-yellow-300 text-purple-950 font-bold px-3.5 py-2.5 rounded-xl text-xs md:text-sm flex items-center space-x-1.5 shadow-lg active:scale-95 transition">
+                <i class="fa-solid fa-plus text-sm"></i>
+                <span>新增新聞</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- NAVIGATION TABS -->
+    <nav class="sticky-nav bg-white border-b border-purple-100 shadow-sm">
+        <div class="max-w-5xl mx-auto px-2 flex justify-around">
+            <button onclick="switchTab('library')" id="nav-library" class="tab-btn py-3.5 px-3 md:px-6 text-xs md:text-sm font-bold border-b-2 border-purple-600 text-purple-700 flex items-center space-x-2 transition">
+                <i class="fa-solid fa-book-open"></i>
+                <span>新聞庫</span>
+            </button>
+            <button onclick="switchTab('reader')" id="nav-reader" class="tab-btn py-3.5 px-3 md:px-6 text-xs md:text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-purple-600 flex items-center space-x-2 transition">
+                <i class="fa-solid fa-glasses"></i>
+                <span>閱讀器</span>
+            </button>
+            <button onclick="switchTab('vocab')" id="nav-vocab" class="tab-btn py-3.5 px-3 md:px-6 text-xs md:text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-purple-600 flex items-center space-x-2 transition">
+                <i class="fa-solid fa-bookmark"></i>
+                <span>生字庫</span>
+            </button>
+        </div>
+    </nav>
+
+    <!-- MAIN CONTENT -->
+    <main class="flex-1 max-w-5xl w-full mx-auto p-3 md:p-6 overflow-y-auto">
+
+        <!-- TAB 1: NEWS LIBRARY -->
+        <section id="tab-library" class="tab-content space-y-4">
+            <div class="bg-white p-4 rounded-2xl shadow-sm border border-purple-100 space-y-3">
+                <div class="flex items-center justify-between">
+                    <h2 class="text-xs md:text-sm font-bold text-purple-900 flex items-center gap-2">
+                        <i class="fa-solid fa-filter text-purple-500"></i> 篩選新聞
+                    </h2>
+                    <button onclick="resetNewsFilters()" class="text-xs text-purple-600 hover:underline">重置</button>
+                </div>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs md:text-sm">
+                    <div>
+                        <label class="block text-slate-500 text-xs mb-1">語言</label>
+                        <select id="filter-lang" onchange="renderNewsList()" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 focus:ring-2 focus:ring-purple-400 outline-none">
+                            <option value="ALL">全部</option>
+                            <option value="zh">繁體中文</option>
+                            <option value="en">English</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-slate-500 text-xs mb-1">分類</label>
+                        <select id="filter-category" onchange="renderNewsList()" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 focus:ring-2 focus:ring-purple-400 outline-none">
+                            <option value="ALL">全部</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-slate-500 text-xs mb-1">月份</label>
+                        <select id="filter-month" onchange="renderNewsList()" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 focus:ring-2 focus:ring-purple-400 outline-none">
+                            <option value="ALL">全部</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-slate-500 text-xs mb-1">狀態</label>
+                        <select id="filter-status" onchange="renderNewsList()" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 focus:ring-2 focus:ring-purple-400 outline-none">
+                            <option value="ALL">全部</option>
+                            <option value="unread">未閱讀</option>
+                            <option value="read">已閱讀</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div id="news-grid" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+        </section>
+
+        <!-- TAB 2: READER -->
+        <section id="tab-reader" class="tab-content hidden space-y-4">
+            <div id="reader-empty" class="bg-white p-8 rounded-2xl shadow-sm border border-purple-100 text-center space-y-3">
+                <i class="fa-solid fa-book-reader text-4xl text-purple-300"></i>
+                <p class="text-slate-600 font-medium">請在「新聞庫」選擇一篇文章開始閱讀。</p>
+                <button onclick="switchTab('library')" class="bg-purple-600 text-white text-xs px-4 py-2.5 rounded-xl shadow">前往新聞庫</button>
+            </div>
+
+            <div id="reader-container" class="hidden space-y-4">
+                <!-- Metadata bar -->
+                <div class="bg-white p-4 rounded-2xl shadow-sm border border-purple-100 space-y-3">
+                    <div class="flex flex-wrap items-center justify-between gap-2 border-b border-purple-50 pb-3">
+                        <div class="flex items-center space-x-2">
+                            <span id="reader-lang-badge" class="px-2.5 py-0.5 text-xs font-bold rounded-full bg-purple-100 text-purple-700">ZH</span>
+                            <span id="reader-category-badge" class="px-2.5 py-0.5 text-xs font-medium rounded-full bg-slate-100 text-slate-600">Category</span>
+                            <span id="reader-date-badge" class="text-xs text-slate-400">2026-10-21</span>
+                        </div>
+                        <div class="flex items-center space-x-1.5">
+                            <button id="reader-toggle-read" onclick="toggleCurrentReadStatus()" class="px-3 py-1.5 text-xs rounded-xl border border-purple-200 text-purple-700 hover:bg-purple-50 transition flex items-center gap-1 font-semibold">
+                                <i class="fa-regular fa-circle-check"></i> <span id="read-status-label">標為已閱讀</span>
+                            </button>
+                            <button onclick="openEditModal()" class="px-3 py-1.5 text-xs rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition flex items-center gap-1 font-semibold" title="編輯文章">
+                                <i class="fa-solid fa-pen"></i> 編輯
+                            </button>
+                            <button onclick="deleteCurrentArticle()" class="text-rose-500 hover:text-rose-700 p-2 text-xs" title="刪除">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <h1 id="reader-title" class="text-xl md:text-2xl font-bold text-slate-900">新聞標題</h1>
+                    <div id="reader-image-wrap" class="hidden rounded-xl overflow-hidden max-h-80 bg-slate-100 border border-slate-200">
+                        <img id="reader-image" src="" class="w-full h-full object-contain cursor-zoom-in" onclick="viewFullImage(this.src)">
+                    </div>
+                </div>
+
+                <!-- Highlighter toolbar (sticky) -->
+                <div class="sticky-toolbar bg-white/95 backdrop-blur-md p-3 rounded-2xl shadow-md border border-purple-200 flex flex-wrap items-center justify-between gap-2 no-select">
+                    <div class="flex items-center space-x-1.5 flex-wrap">
+                        <span class="text-xs font-bold text-slate-500 mr-1"><i class="fa-solid fa-highlighter text-purple-600"></i> 彩虹筆</span>
+                        <button onclick="setHighlightColor('red')"    class="color-btn bg-rose-300" title="粉紅"></button>
+                        <button onclick="setHighlightColor('orange')" class="color-btn bg-orange-300" title="橙"></button>
+                        <button onclick="setHighlightColor('yellow')" class="color-btn bg-yellow-300" title="黃"></button>
+                        <button onclick="setHighlightColor('green')"  class="color-btn bg-green-300" title="綠"></button>
+                        <button onclick="setHighlightColor('blue')"   class="color-btn bg-blue-300" title="藍"></button>
+                        <button onclick="setHighlightColor('purple')" class="color-btn bg-purple-300" title="紫"></button>
+                        <button onclick="setHighlightColor('pink')"   class="color-btn bg-pink-300" title="桃紅"></button>
+                        <button onclick="removeSelectionHighlight()" class="px-2.5 py-1.5 bg-slate-100 text-slate-600 rounded-lg text-xs font-semibold hover:bg-slate-200 transition ml-1">
+                            <i class="fa-solid fa-eraser"></i> 清除
+                        </button>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <button onclick="openBookmarkModal('vocab')" class="bg-purple-600 text-white text-xs px-3 py-2 rounded-xl font-bold shadow active:scale-95 flex items-center gap-1">
+                            <i class="fa-solid fa-bookmark text-yellow-300"></i> + 詞彙
+                        </button>
+                        <button onclick="openBookmarkModal('phrase')" class="bg-purple-800 text-white text-xs px-3 py-2 rounded-xl font-bold shadow active:scale-95 flex items-center gap-1">
+                            <i class="fa-solid fa-quote-left text-yellow-300"></i> + 短語
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Article body -->
+                <div class="bg-white p-5 md:p-8 rounded-2xl shadow-sm border border-purple-100">
+                    <div id="reader-body" class="reader-text text-slate-800 whitespace-pre-wrap selection:bg-purple-200"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 3: VOCAB -->
+        <section id="tab-vocab" class="tab-content hidden space-y-4">
+            <div class="bg-white p-4 rounded-2xl shadow-sm border border-purple-100 space-y-3">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <div class="flex bg-slate-100 p-1 rounded-xl">
+                        <button onclick="setVocabTypeFilter('ALL')" id="vtab-ALL" class="px-3 py-1.5 text-xs font-bold rounded-lg bg-white shadow-xs text-purple-700">全部</button>
+                        <button onclick="setVocabTypeFilter('vocab')" id="vtab-vocab" class="px-3 py-1.5 text-xs font-medium rounded-lg text-slate-600">詞彙</button>
+                        <button onclick="setVocabTypeFilter('phrase')" id="vtab-phrase" class="px-3 py-1.5 text-xs font-medium rounded-lg text-slate-600">短語</button>
+                    </div>
+                    <div class="flex items-center space-x-2 text-xs">
+                        <select id="vocab-filter-lang" onchange="renderVocabList()" class="bg-slate-50 border border-slate-200 rounded-lg p-2 focus:ring-1 focus:ring-purple-400">
+                            <option value="ALL">全語言</option>
+                            <option value="zh">中文</option>
+                            <option value="en">英文</option>
+                        </select>
+                        <select id="vocab-filter-mastery" onchange="renderVocabList()" class="bg-slate-50 border border-slate-200 rounded-lg p-2 focus:ring-1 focus:ring-purple-400">
+                            <option value="ALL">全進度</option>
+                            <option value="learning">學習中</option>
+                            <option value="mastered">已學會</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div id="vocab-grid" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+        </section>
+    </main>
+
+    <!-- ========== MODALS ========== -->
+
+    <!-- ADD / EDIT NEWS MODAL (shared) -->
+    <div id="modal-add-news" class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white w-full max-w-xl rounded-2xl shadow-xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div class="bg-purple-700 text-white p-4 flex justify-between items-center">
+                <h3 id="news-modal-title" class="font-bold text-base flex items-center gap-2">
+                    <i class="fa-solid fa-file-circle-plus"></i> 新增新聞文章
+                </h3>
+                <button onclick="closeAddModal()" class="text-white/80 hover:text-white p-1"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            <div class="p-5 overflow-y-auto space-y-4 text-sm">
+                <div>
+                    <label class="block font-bold text-slate-700 mb-1">新聞標題 *</label>
+                    <input type="text" id="add-news-title" placeholder="例如：香港動植物公園新成員登場" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 focus:ring-2 focus:ring-purple-400 outline-none">
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                        <label class="block font-bold text-slate-700 mb-1">語言 *</label>
+                        <select id="add-news-lang" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 focus:ring-2 focus:ring-purple-400 outline-none">
+                            <option value="zh">繁體中文</option>
+                            <option value="en">English</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block font-bold text-slate-700 mb-1">日期 *</label>
+                        <input type="date" id="add-news-date" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 focus:ring-2 focus:ring-purple-400 outline-none">
+                    </div>
+                    <div>
+                        <div class="flex items-center justify-between mb-1">
+                            <label class="font-bold text-slate-700">分類 *</label>
+                            <button onclick="promptAddNewCategory()" class="text-purple-600 font-bold text-[11px]">+ 新增</button>
+                        </div>
+                        <select id="add-news-category" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 focus:ring-2 focus:ring-purple-400 outline-none"></select>
+                    </div>
+                </div>
+                <div>
+                    <label class="block font-bold text-slate-700 mb-1">上載報紙相片 / 截圖</label>
+                    <input type="file" id="add-news-image" accept="image/*" class="w-full text-xs text-slate-500 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-purple-100 file:text-purple-700">
+                    <p class="text-[11px] text-slate-400 mt-1">圖片會自動壓縮以節省空間</p>
+                    <div id="edit-current-image" class="hidden mt-2">
+                        <p class="text-xs text-slate-500 mb-1">目前圖片：</p>
+                        <img id="edit-preview-img" class="max-h-32 rounded-lg border">
+                        <button onclick="clearCurrentImage()" class="text-xs text-rose-500 mt-1">移除圖片</button>
+                    </div>
+                </div>
+                <div>
+                    <label class="block font-bold text-slate-700 mb-1">新聞內文 *</label>
+                    <textarea id="add-news-text" rows="7" placeholder="請在此貼上或輸入新聞內文..." class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 focus:ring-2 focus:ring-purple-400 outline-none leading-relaxed"></textarea>
+                </div>
+            </div>
+            <div class="bg-slate-50 p-4 border-t border-slate-100 flex items-center justify-end space-x-2">
+                <button onclick="closeAddModal()" class="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-semibold text-xs">取消</button>
+                <button onclick="saveNewArticle()" id="save-news-btn" class="px-5 py-2.5 rounded-xl bg-purple-600 text-white font-bold text-xs shadow-md">儲存新聞</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- BOOKMARK MODAL -->
+    <div id="modal-bookmark" class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white w-full max-w-lg rounded-2xl shadow-xl overflow-hidden flex flex-col">
+            <div class="bg-purple-700 text-white p-4 flex justify-between items-center">
+                <h3 id="bm-modal-title" class="font-bold text-base flex items-center gap-2">
+                    <i class="fa-solid fa-bookmark text-yellow-300"></i> 新增字詞短語
+                </h3>
+                <button onclick="closeBookmarkModal()" class="text-white/80 hover:text-white p-1"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            <div class="p-5 space-y-3 text-sm">
+                <div>
+                    <label class="block font-bold text-slate-700 mb-1">已選取的字詞 / 短語</label>
+                    <input type="text" id="bm-text" readonly class="w-full bg-purple-50 font-bold text-purple-900 border border-purple-200 rounded-xl p-3 outline-none">
+                </div>
+                <div id="bm-pinyin-wrap" class="hidden">
+                    <label class="block font-bold text-slate-700 mb-1">普通話拼音 (自動產生)</label>
+                    <input type="text" id="bm-pinyin" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 outline-none font-medium text-purple-700">
+                </div>
+                <div>
+                    <div class="flex items-center justify-between mb-1">
+                        <label id="bm-meaning-label" class="font-bold text-slate-700">翻譯意思</label>
+                        <span class="text-[11px] text-purple-600 italic">留空將嘗試自動翻譯</span>
+                    </div>
+                    <input type="text" id="bm-meaning" placeholder="可自行輸入或留空自動對照..." class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 focus:ring-2 focus:ring-purple-400 outline-none">
+                </div>
+                <div>
+                    <label class="block font-bold text-slate-700 mb-1">個人筆記 (選填)</label>
+                    <input type="text" id="bm-notes" placeholder="例如：在公園新聞看到的詞語" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 focus:ring-2 focus:ring-purple-400 outline-none">
+                </div>
+            </div>
+            <div class="bg-slate-50 p-4 border-t border-slate-100 flex items-center justify-end space-x-2">
+                <button onclick="closeBookmarkModal()" class="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-semibold text-xs">取消</button>
+                <button onclick="saveBookmarkEntry()" class="px-5 py-2.5 rounded-xl bg-purple-600 text-white font-bold text-xs shadow-md">確定加入生字庫</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- IMAGE PREVIEW -->
+    <div id="modal-image-preview" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 hidden flex items-center justify-center p-4" onclick="this.classList.add('hidden')">
+        <div class="relative max-w-4xl max-h-[90vh]">
+            <img id="preview-img-target" src="" class="max-w-full max-h-[85vh] object-contain rounded-xl shadow-2xl">
+            <p class="text-center text-white/80 text-xs mt-2">點擊任意位置關閉</p>
+        </div>
+    </div>
+
+    <!-- TOAST -->
+    <div id="toast" class="fixed bottom-6 right-6 z-50 bg-slate-900 text-white px-4 py-3 rounded-2xl shadow-xl flex items-center space-x-2 text-xs font-semibold opacity-0 pointer-events-none transition-all duration-300" style="bottom: max(24px, calc(var(--sab) + 16px));">
+        <i id="toast-icon" class="fa-solid fa-circle-info text-purple-400"></i>
+        <span id="toast-msg">通知訊息</span>
+    </div>
+
+    <script>
+        /* ==========================================================================
+           STATE
+           ========================================================================== */
+        let newsList = [];
+        let vocabList = [];
+        let categories = ['科學', '動物', '體育', '藝術', '國際', '日常'];
+        let currentArticleId = null;
+        let activeVocabTypeFilter = 'ALL';
+        let pendingBookmarkType = 'vocab';
+        let isEditMode = false;          // true when editing existing article
+        let editingImageData = null;     // keep existing image when editing
+
+        const defaultSampleNews = [
+            {
+                id: 'news-1',
+                title: '香港動植物公園迎接新保育企鵝家族',
+                lang: 'zh',
+                category: '動物',
+                date: '2026-10-21',
+                read: false,
+                image: null,
+                body: `香港動植物公園今天宣佈，順利迎接了四隻保育類的企鵝保育成員。這批企鵝來自外地海洋保護區，旨在推廣保育生態教育。\n\n公園負責人表示，這群企鵝適應良好，對新環境充滿好奇心。孩子們可以在週末前來園區觀察企鵝的日常習性，學習環境保護的關鍵知識。`
+            },
+            {
+                id: 'news-2',
+                title: 'Space Agency Discovers Water Ice on Moon Crater',
+                lang: 'en',
+                category: '科學',
+                date: '2026-10-15',
+                read: true,
+                image: null,
+                body: `Scientists from the international space research lab have announced a major discovery. Recent robotic exploration missions found clear traces of liquid water ice inside a shadowed lunar crater.\n\nThis landmark discovery provides critical resources for future space exploration and lunar base settlements.`
+            }
+        ];
+
+        /* ==========================================================================
+           INIT & STORAGE
+           ========================================================================== */
+        window.onload = function () {
+            loadCategoriesFromStorage();
+            loadNewsFromStorage();
+            loadVocabFromStorage();
+
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('add-news-date').value = today;
+
+            populateCategoryDropdowns();
+            populateMonthFilterDropdown();
+            renderNewsList();
+            renderVocabList();
+
+            // Pre-load speech voices (important on iOS)
+            if ('speechSynthesis' in window) {
+                speechSynthesis.getVoices();
+                speechSynthesis.onvoiceschanged = () => speechSynthesis.getVoices();
+            }
+        };
+
+        function loadCategoriesFromStorage() {
+            const saved = localStorage.getItem('knews_categories');
+            if (saved) { try { categories = JSON.parse(saved); } catch(e) {} }
+        }
+        function saveCategoriesToStorage() {
+            localStorage.setItem('knews_categories', JSON.stringify(categories));
+        }
+        function loadNewsFromStorage() {
+            const saved = localStorage.getItem('knews_articles');
+            if (saved) {
+                try { newsList = JSON.parse(saved); } catch(e) { newsList = defaultSampleNews; }
+            } else {
+                newsList = defaultSampleNews;
+                saveNewsToStorage();
+            }
+        }
+        function saveNewsToStorage() {
+            localStorage.setItem('knews_articles', JSON.stringify(newsList));
+        }
+        function loadVocabFromStorage() {
+            const saved = localStorage.getItem('knews_vocab');
+            if (saved) { try { vocabList = JSON.parse(saved); } catch(e) { vocabList = []; } }
+        }
+        function saveVocabToStorage() {
+            localStorage.setItem('knews_vocab', JSON.stringify(vocabList));
+        }
+
+        /* ==========================================================================
+           UI HELPERS
+           ========================================================================== */
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('border-purple-600', 'text-purple-700', 'font-bold');
+                btn.classList.add('border-transparent', 'text-slate-500');
+            });
+            document.getElementById(`tab-${tabName}`).classList.remove('hidden');
+            const activeNav = document.getElementById(`nav-${tabName}`);
+            activeNav.classList.remove('border-transparent', 'text-slate-500');
+            activeNav.classList.add('border-purple-600', 'text-purple-700', 'font-bold');
+        }
+
+        function showToast(msg, icon = 'fa-circle-info') {
+            const toast = document.getElementById('toast');
+            document.getElementById('toast-msg').innerText = msg;
+            document.getElementById('toast-icon').className = `fa-solid ${icon} text-purple-400`;
+            toast.classList.remove('opacity-0', 'pointer-events-none');
+            toast.classList.add('opacity-100');
+            setTimeout(() => {
+                toast.classList.remove('opacity-100');
+                toast.classList.add('opacity-0', 'pointer-events-none');
+            }, 2600);
+        }
+
+        /* ==========================================================================
+           CATEGORIES & MONTH FILTER
+           ========================================================================== */
+        function populateCategoryDropdowns() {
+            const filterCat = document.getElementById('filter-category');
+            const addCat = document.getElementById('add-news-category');
+            filterCat.innerHTML = '<option value="ALL">全部</option>';
+            addCat.innerHTML = '';
+            categories.forEach(cat => {
+                filterCat.innerHTML += `<option value="${cat}">${cat}</option>`;
+                addCat.innerHTML += `<option value="${cat}">${cat}</option>`;
+            });
+        }
+
+        function promptAddNewCategory() {
+            const newCat = prompt('請輸入新分類名稱 (例如: 歷史 / History):');
+            if (newCat && newCat.trim()) {
+                const trimmed = newCat.trim();
+                if (!categories.includes(trimmed)) {
+                    categories.push(trimmed);
+                    saveCategoriesToStorage();
+                    populateCategoryDropdowns();
+                    document.getElementById('add-news-category').value = trimmed;
+                    showToast('已新增自訂分類！', 'fa-check');
+                }
+            }
+        }
+
+        function populateMonthFilterDropdown() {
+            const monthSelect = document.getElementById('filter-month');
+            const months = new Set();
+            newsList.forEach(item => {
+                if (item.date) months.add(item.date.substring(0, 7));
+            });
+            const sorted = Array.from(months).sort().reverse();
+            monthSelect.innerHTML = '<option value="ALL">全部</option>';
+            const monthNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+            sorted.forEach(m => {
+                const [y, mm] = m.split('-');
+                monthSelect.innerHTML += `<option value="${m}">${monthNames[parseInt(mm)-1]} ${y}</option>`;
+            });
+        }
+
+        /* ==========================================================================
+           NEWS LIST
+           ========================================================================== */
+        function renderNewsList() {
+            const grid = document.getElementById('news-grid');
+            grid.innerHTML = '';
+            const lang = document.getElementById('filter-lang').value;
+            const category = document.getElementById('filter-category').value;
+            const month = document.getElementById('filter-month').value;
+            const status = document.getElementById('filter-status').value;
+
+            const filtered = newsList.filter(item => {
+                if (lang !== 'ALL' && item.lang !== lang) return false;
+                if (category !== 'ALL' && item.category !== category) return false;
+                if (month !== 'ALL' && !item.date.startsWith(month)) return false;
+                if (status === 'read' && !item.read) return false;
+                if (status === 'unread' && item.read) return false;
+                return true;
+            });
+
+            if (filtered.length === 0) {
+                grid.innerHTML = `<div class="col-span-full bg-white p-8 rounded-2xl text-center text-slate-400 border border-purple-100">
+                    <i class="fa-regular fa-folder-open text-3xl mb-2"></i>
+                    <p class="text-sm">沒有符合條件的新聞文章。</p>
+                </div>`;
+                return;
+            }
+
+            filtered.forEach(item => {
+                const card = document.createElement('div');
+                card.className = "bg-white p-4 rounded-2xl border border-purple-100 shadow-sm hover:shadow-md transition flex flex-col justify-between space-y-3 cursor-pointer group";
+                card.onclick = () => openArticleInReader(item.id);
+
+                const statusBadge = item.read
+                    ? `<span class="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full text-xs font-bold"><i class="fa-solid fa-check"></i> 已閱讀</span>`
+                    : `<span class="bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full text-xs font-bold"><i class="fa-regular fa-clock"></i> 未閱讀</span>`;
+
+                const snippet = (item.body || '').replace(/<[^>]+>/g, '').substring(0, 85) + ((item.body || '').length > 85 ? '...' : '');
+
+                card.innerHTML = `
+                    <div class="space-y-2">
+                        <div class="flex items-center justify-between text-xs">
+                            <div class="flex items-center space-x-1">
+                                <span class="bg-purple-100 text-purple-700 px-2 py-0.5 rounded-md font-bold uppercase">${item.lang}</span>
+                                <span class="bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md font-medium">${item.category}</span>
+                            </div>
+                            ${statusBadge}
+                        </div>
+                        <h3 class="font-bold text-slate-800 group-hover:text-purple-700 transition text-base md:text-lg line-clamp-2">${item.title}</h3>
+                        <p class="text-xs text-slate-500 line-clamp-3 leading-relaxed">${snippet}</p>
+                    </div>
+                    <div class="pt-2 border-t border-slate-100 flex items-center justify-between text-xs text-slate-400">
+                        <span><i class="fa-regular fa-calendar"></i> ${item.date || '無日期'}</span>
+                        <span class="text-purple-600 group-hover:translate-x-1 transition font-bold">閱讀 <i class="fa-solid fa-arrow-right"></i></span>
+                    </div>`;
+                grid.appendChild(card);
+            });
+        }
+
+        function resetNewsFilters() {
+            document.getElementById('filter-lang').value = 'ALL';
+            document.getElementById('filter-category').value = 'ALL';
+            document.getElementById('filter-month').value = 'ALL';
+            document.getElementById('filter-status').value = 'ALL';
+            renderNewsList();
+        }
+
+        /* ==========================================================================
+           ADD / EDIT ARTICLE
+           ========================================================================== */
+        function openAddModal() {
+            isEditMode = false;
+            editingImageData = null;
+            document.getElementById('news-modal-title').innerHTML = '<i class="fa-solid fa-file-circle-plus"></i> 新增新聞文章';
+            document.getElementById('save-news-btn').textContent = '儲存新聞';
+            document.getElementById('add-news-title').value = '';
+            document.getElementById('add-news-text').value = '';
+            document.getElementById('add-news-image').value = '';
+            document.getElementById('add-news-lang').value = 'zh';
+            document.getElementById('add-news-date').value = new Date().toISOString().split('T')[0];
+            document.getElementById('edit-current-image').classList.add('hidden');
+            document.getElementById('modal-add-news').classList.remove('hidden');
+        }
+
+        function openEditModal() {
+            if (!currentArticleId) return;
+            const article = newsList.find(a => a.id === currentArticleId);
+            if (!article) return;
+
+            isEditMode = true;
+            editingImageData = article.image || null;
+
+            document.getElementById('news-modal-title').innerHTML = '<i class="fa-solid fa-pen-to-square"></i> 編輯新聞文章';
+            document.getElementById('save-news-btn').textContent = '更新新聞';
+            document.getElementById('add-news-title').value = article.title;
+            document.getElementById('add-news-lang').value = article.lang;
+            document.getElementById('add-news-date').value = article.date || '';
+            document.getElementById('add-news-category').value = article.category;
+            // strip HTML for editing body
+            const tmp = document.createElement('div');
+            tmp.innerHTML = article.body || '';
+            document.getElementById('add-news-text').value = tmp.innerText || tmp.textContent || '';
+            document.getElementById('add-news-image').value = '';
+
+            if (article.image) {
+                document.getElementById('edit-current-image').classList.remove('hidden');
+                document.getElementById('edit-preview-img').src = article.image;
+            } else {
+                document.getElementById('edit-current-image').classList.add('hidden');
+            }
+
+            document.getElementById('modal-add-news').classList.remove('hidden');
+        }
+
+        function clearCurrentImage() {
+            editingImageData = null;
+            document.getElementById('edit-current-image').classList.add('hidden');
+            document.getElementById('add-news-image').value = '';
+        }
+
+        function closeAddModal() {
+            document.getElementById('modal-add-news').classList.add('hidden');
+            isEditMode = false;
+        }
+
+        // Compress image with Canvas (important for iOS localStorage limits)
+        function compressImage(file, maxWidth = 1200, quality = 0.72) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = function (e) {
+                    const img = new Image();
+                    img.onload = function () {
+                        let w = img.width, h = img.height;
+                        if (w > maxWidth) {
+                            h = Math.round(h * maxWidth / w);
+                            w = maxWidth;
+                        }
+                        const canvas = document.createElement('canvas');
+                        canvas.width = w;
+                        canvas.height = h;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, w, h);
+                        resolve(canvas.toDataURL('image/jpeg', quality));
+                    };
+                    img.onerror = reject;
+                    img.src = e.target.result;
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        }
+
+        async function saveNewArticle() {
+            const lang = document.getElementById('add-news-lang').value;
+            const date = document.getElementById('add-news-date').value;
+            const category = document.getElementById('add-news-category').value;
+            const title = document.getElementById('add-news-title').value.trim();
+            const text = document.getElementById('add-news-text').value.trim();
+            const fileInput = document.getElementById('add-news-image');
+
+            if (!title || !text) {
+                alert('請輸入新聞標題與內文！');
+                return;
+            }
+
+            let imageDataUrl = editingImageData; // keep existing if editing & no new file
+
+            if (fileInput.files && fileInput.files[0]) {
+                try {
+                    showToast('正在壓縮圖片...', 'fa-spinner fa-spin');
+                    imageDataUrl = await compressImage(fileInput.files[0]);
+                } catch (err) {
+                    console.warn('Image compress failed', err);
+                    // fallback to original base64 if compress fails
+                    imageDataUrl = await new Promise(r => {
+                        const fr = new FileReader();
+                        fr.onload = e => r(e.target.result);
+                        fr.readAsDataURL(fileInput.files[0]);
+                    });
+                }
+            }
+
+            if (isEditMode && currentArticleId) {
+                // UPDATE existing
+                const article = newsList.find(a => a.id === currentArticleId);
+                if (article) {
+                    article.title = title;
+                    article.lang = lang;
+                    article.category = category;
+                    article.date = date;
+                    article.image = imageDataUrl;
+                    // Keep existing highlights if body text is similar; otherwise replace plain
+                    // Simple approach: replace body with plain text (user can re-highlight)
+                    article.body = text;
+                    saveNewsToStorage();
+                    populateMonthFilterDropdown();
+                    renderNewsList();
+                    openArticleInReader(currentArticleId); // refresh reader
+                    closeAddModal();
+                    showToast('新聞已更新！', 'fa-circle-check');
+                }
+            } else {
+                // CREATE new
+                const newId = 'news-' + Date.now();
+                const newArticle = {
+                    id: newId,
+                    title, lang, category, date,
+                    read: false,
+                    image: imageDataUrl || null,
+                    body: text
+                };
+                newsList.unshift(newArticle);
+                saveNewsToStorage();
+                populateMonthFilterDropdown();
+                renderNewsList();
+                closeAddModal();
+                document.getElementById('add-news-title').value = '';
+                document.getElementById('add-news-text').value = '';
+                document.getElementById('add-news-image').value = '';
+                showToast('已成功新增新聞！', 'fa-circle-check');
+                openArticleInReader(newId);
+            }
+        }
+
+        /* ==========================================================================
+           READER
+           ========================================================================== */
+        function openArticleInReader(id) {
+            const article = newsList.find(a => a.id === id);
+            if (!article) return;
+            currentArticleId = id;
+
+            document.getElementById('reader-empty').classList.add('hidden');
+            document.getElementById('reader-container').classList.remove('hidden');
+
+            document.getElementById('reader-title').innerText = article.title;
+            document.getElementById('reader-lang-badge').innerText = article.lang.toUpperCase();
+            document.getElementById('reader-category-badge').innerText = article.category;
+            document.getElementById('reader-date-badge').innerText = article.date || '';
+
+            const imgWrap = document.getElementById('reader-image-wrap');
+            const imgTag = document.getElementById('reader-image');
+            if (article.image) {
+                imgTag.src = article.image;
+                imgWrap.classList.remove('hidden');
+            } else {
+                imgWrap.classList.add('hidden');
+            }
+
+            document.getElementById('reader-body').innerHTML = article.body || '';
+            updateReadStatusUI(article.read);
+            // clear any previous selection when switching articles
+            if (typeof clearStoredSelection === 'function') clearStoredSelection();
+            window.getSelection().removeAllRanges();
+            switchTab('reader');
+        }
+
+        function toggleCurrentReadStatus() {
+            if (!currentArticleId) return;
+            const article = newsList.find(a => a.id === currentArticleId);
+            if (article) {
+                article.read = !article.read;
+                saveNewsToStorage();
+                updateReadStatusUI(article.read);
+                renderNewsList();
+                showToast(article.read ? '已標為「已閱讀」' : '已標為「未閱讀」');
+            }
+        }
+
+        function updateReadStatusUI(isRead) {
+            const btn = document.getElementById('reader-toggle-read');
+            const label = document.getElementById('read-status-label');
+            if (isRead) {
+                btn.className = "px-3 py-1.5 text-xs rounded-xl bg-emerald-100 text-emerald-800 font-bold border border-emerald-300 transition flex items-center gap-1";
+                label.innerText = '已閱讀 (點擊重置)';
+            } else {
+                btn.className = "px-3 py-1.5 text-xs rounded-xl border border-purple-200 text-purple-700 hover:bg-purple-50 transition flex items-center gap-1 font-semibold";
+                label.innerText = '標為已閱讀';
+            }
+        }
+
+        function deleteCurrentArticle() {
+            if (!currentArticleId) return;
+            if (confirm('確定要刪除這篇文章嗎？')) {
+                newsList = newsList.filter(a => a.id !== currentArticleId);
+                saveNewsToStorage();
+                currentArticleId = null;
+                document.getElementById('reader-container').classList.add('hidden');
+                document.getElementById('reader-empty').classList.remove('hidden');
+                populateMonthFilterDropdown();
+                renderNewsList();
+                switchTab('library');
+                showToast('文章已刪除');
+            }
+        }
+
+        function viewFullImage(src) {
+            document.getElementById('preview-img-target').src = src;
+            document.getElementById('modal-image-preview').classList.remove('hidden');
+        }
+
+        /* ==========================================================================
+           HIGHLIGHTING – iOS-safe selection capture
+           On iOS, tapping a button clears the live selection.
+           We therefore keep the last valid selection in memory.
+           ========================================================================== */
+        let lastSelectionText = '';
+        let lastSelectionRange = null;   // cloned Range
+
+        function captureSelection() {
+            const sel = window.getSelection();
+            if (!sel || sel.isCollapsed || !sel.rangeCount) return;
+
+            const range = sel.getRangeAt(0);
+            const container = document.getElementById('reader-body');
+            if (!container || !container.contains(range.commonAncestorContainer)) return;
+
+            const text = sel.toString().trim();
+            if (!text) return;
+
+            lastSelectionText = text;
+            // clone so it survives after the live selection is cleared
+            try {
+                lastSelectionRange = range.cloneRange();
+            } catch (e) {
+                lastSelectionRange = null;
+            }
+        }
+
+        // Capture on every selection change + touch end (iOS)
+        document.addEventListener('selectionchange', captureSelection);
+        document.addEventListener('touchend', function () {
+            // slight delay so iOS finishes the selection
+            setTimeout(captureSelection, 30);
+        }, { passive: true });
+
+        function getActiveSelection() {
+            // Prefer live selection if still present
+            const sel = window.getSelection();
+            if (sel && !sel.isCollapsed && sel.rangeCount) {
+                const text = sel.toString().trim();
+                if (text) {
+                    return { text, range: sel.getRangeAt(0) };
+                }
+            }
+            // Fall back to the stored one
+            if (lastSelectionText) {
+                return { text: lastSelectionText, range: lastSelectionRange };
+            }
+            return null;
+        }
+
+        function clearStoredSelection() {
+            lastSelectionText = '';
+            lastSelectionRange = null;
+        }
+
+        function setHighlightColor(colorName) {
+            const active = getActiveSelection();
+            if (!active) {
+                showToast('請先選取文章中的字詞或短語！', 'fa-hand-pointer');
+                return;
+            }
+
+            const container = document.getElementById('reader-body');
+            if (!container) return;
+
+            // If we still have a live Range that is inside the body, use it
+            let range = active.range;
+            if (!range || !container.contains(range.commonAncestorContainer)) {
+                // Range is stale (common after button tap). 
+                // Try to re-find the text and create a new range.
+                range = findTextRange(container, active.text);
+                if (!range) {
+                    showToast('選取已失效，請重新選取文字後再按顏色。', 'fa-exclamation');
+                    return;
+                }
+            }
+
+            try {
+                const span = document.createElement('span');
+                span.className = `hl-${colorName}`;
+
+                try {
+                    range.surroundContents(span);
+                } catch (e) {
+                    // Partial selection across nodes – extract & wrap
+                    const contents = range.extractContents();
+                    span.appendChild(contents);
+                    range.insertNode(span);
+                }
+
+                // Persist
+                const article = newsList.find(a => a.id === currentArticleId);
+                if (article) {
+                    article.body = container.innerHTML;
+                    saveNewsToStorage();
+                }
+
+                // Clear both live and stored selection
+                window.getSelection().removeAllRanges();
+                clearStoredSelection();
+                showToast('已成功標示！', 'fa-paint-brush');
+            } catch (err) {
+                console.warn(err);
+                showToast('標示失敗，請再試一次選取較短範圍。', 'fa-exclamation');
+            }
+        }
+
+        // Helper: locate a text string inside a container and return a Range
+        function findTextRange(container, searchText) {
+            if (!searchText) return null;
+            const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, null, false);
+            let node;
+            while ((node = walker.nextNode())) {
+                const idx = node.nodeValue.indexOf(searchText);
+                if (idx !== -1) {
+                    const range = document.createRange();
+                    range.setStart(node, idx);
+                    range.setEnd(node, idx + searchText.length);
+                    return range;
+                }
+            }
+            return null;
+        }
+
+        function removeSelectionHighlight() {
+            const active = getActiveSelection();
+            let node = null;
+
+            if (active && active.range) {
+                node = active.range.commonAncestorContainer;
+                if (node.nodeType === 3) node = node.parentElement;
+            } else {
+                // fallback to current selection
+                const sel = window.getSelection();
+                if (sel && sel.anchorNode) {
+                    node = sel.anchorNode;
+                    if (node.nodeType === 3) node = node.parentElement;
+                }
+            }
+
+            while (node && node.id !== 'reader-body') {
+                if (node.className && typeof node.className === 'string' && node.className.includes('hl-')) {
+                    const text = document.createTextNode(node.innerText);
+                    node.parentNode.replaceChild(text, node);
+
+                    const article = newsList.find(a => a.id === currentArticleId);
+                    if (article) {
+                        article.body = document.getElementById('reader-body').innerHTML;
+                        saveNewsToStorage();
+                    }
+                    showToast('已清除標示！');
+                    window.getSelection().removeAllRanges();
+                    clearStoredSelection();
+                    return;
+                }
+                node = node.parentElement;
+            }
+            showToast('請先點選有螢光標記的文字，再按「清除」。');
+        }
+
+        /* ==========================================================================
+           BOOKMARK + AUTO MEANING / PINYIN
+           ========================================================================== */
+        function openBookmarkModal(type) {
+            const active = getActiveSelection();
+            const selectedText = active ? active.text : '';
+
+            if (!selectedText) {
+                showToast('請先選取新聞中的字詞或短語！', 'fa-hand-pointer');
+                return;
+            }
+
+            pendingBookmarkType = type;
+            document.getElementById('bm-modal-title').innerHTML = type === 'vocab'
+                ? `<i class="fa-solid fa-bookmark text-yellow-300"></i> 新增詞彙 (Vocab)`
+                : `<i class="fa-solid fa-quote-left text-yellow-300"></i> 新增短語 (Phrase)`;
+
+            document.getElementById('bm-text').value = selectedText;
+            document.getElementById('bm-meaning').value = '';
+            document.getElementById('bm-notes').value = '';
+
+            const isChinese = /[\u4e00-\u9fa5]/.test(selectedText);
+            const pinyinWrap = document.getElementById('bm-pinyin-wrap');
+
+            if (isChinese) {
+                pinyinWrap.classList.remove('hidden');
+                if (window.pinyinPro) {
+                    try {
+                        const py = window.pinyinPro.pinyin(selectedText, { toneType: 'symbol' });
+                        document.getElementById('bm-pinyin').value = py;
+                    } catch (e) {
+                        document.getElementById('bm-pinyin').value = '';
+                    }
+                } else {
+                    document.getElementById('bm-pinyin').value = '';
+                }
+                document.getElementById('bm-meaning-label').innerText = '英文翻譯 / English Meaning';
+            } else {
+                pinyinWrap.classList.add('hidden');
+                document.getElementById('bm-pinyin').value = '';
+                document.getElementById('bm-meaning-label').innerText = '中文意思 / Traditional Chinese Meaning';
+            }
+
+            autoGenerateMeaning();
+            document.getElementById('modal-bookmark').classList.remove('hidden');
+        }
+
+        function closeBookmarkModal() {
+            document.getElementById('modal-bookmark').classList.add('hidden');
+        }
+
+        async function autoGenerateMeaning() {
+            const text = document.getElementById('bm-text').value.trim();
+            if (!text) return;
+            const isChinese = /[\u4e00-\u9fa5]/.test(text);
+            const langPair = isChinese ? 'zh-HK|en' : 'en|zh-TW';
+            const meaningInput = document.getElementById('bm-meaning');
+            meaningInput.placeholder = '查詢中...';
+
+            try {
+                const response = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${langPair}`);
+                const data = await response.json();
+                if (data && data.responseData && data.responseData.translatedText) {
+                    let translation = data.responseData.translatedText;
+                    if (!translation.includes('MYMEMORY') && !translation.includes('QUERY LENGTH')) {
+                        meaningInput.value = translation;
+                        return;
+                    }
+                }
+                throw new Error('API limit');
+            } catch (err) {
+                meaningInput.placeholder = isChinese ? '請輸入英文意思 (或由系統自動對照)...' : '請輸入中文意思...';
+            }
+        }
+
+        function saveBookmarkEntry() {
+            const text = document.getElementById('bm-text').value.trim();
+            let meaning = document.getElementById('bm-meaning').value.trim();
+            const pinyin = document.getElementById('bm-pinyin').value.trim();
+            const notes = document.getElementById('bm-notes').value.trim();
+            if (!text) return;
+
+            const isChinese = /[\u4e00-\u9fa5]/.test(text);
+            if (!meaning) {
+                meaning = isChinese ? '(請自行填寫英文意思)' : '(請自行填寫中文意思)';
+            }
+
+            const newEntry = {
+                id: 'vocab-' + Date.now(),
+                text,
+                type: pendingBookmarkType,
+                lang: isChinese ? 'zh' : 'en',
+                meaning,
+                pinyin: isChinese ? (pinyin || '') : '',
+                notes,
+                mastered: false,
+                dateAdded: new Date().toISOString().split('T')[0]
+            };
+
+            vocabList.unshift(newEntry);
+            saveVocabToStorage();
+            renderVocabList();
+            closeBookmarkModal();
+            showToast(pendingBookmarkType === 'vocab' ? '已儲存至詞彙庫！' : '已儲存至短語庫！', 'fa-bookmark');
+        }
+
+        /* ==========================================================================
+           VOCAB LIST + TTS
+           ========================================================================== */
+        function setVocabTypeFilter(type) {
+            activeVocabTypeFilter = type;
+            ['ALL', 'vocab', 'phrase'].forEach(t => {
+                const btn = document.getElementById(`vtab-${t}`);
+                if (t === type) {
+                    btn.className = "px-3 py-1.5 text-xs font-bold rounded-lg bg-white shadow-xs text-purple-700";
+                } else {
+                    btn.className = "px-3 py-1.5 text-xs font-medium rounded-lg text-slate-600";
+                }
+            });
+            renderVocabList();
+        }
+
+        function renderVocabList() {
+            const langFilter = document.getElementById('vocab-filter-lang').value;
+            const masteryFilter = document.getElementById('vocab-filter-mastery').value;
+            const grid = document.getElementById('vocab-grid');
+            grid.innerHTML = '';
+
+            const filtered = vocabList.filter(item => {
+                if (activeVocabTypeFilter !== 'ALL' && item.type !== activeVocabTypeFilter) return false;
+                if (langFilter !== 'ALL' && item.lang !== langFilter) return false;
+                if (masteryFilter === 'mastered' && !item.mastered) return false;
+                if (masteryFilter === 'learning' && item.mastered) return false;
+                return true;
+            });
+
+            if (filtered.length === 0) {
+                grid.innerHTML = `<div class="col-span-full bg-white p-8 rounded-2xl text-center text-slate-400 border border-purple-100">
+                    <i class="fa-solid fa-bookmark text-3xl mb-2"></i>
+                    <p class="text-sm">尚未有相關生字或短語紀錄。</p>
+                </div>`;
+                return;
+            }
+
+            filtered.forEach(item => {
+                const card = document.createElement('div');
+                card.className = `bg-white p-4 rounded-2xl border transition shadow-sm space-y-3 ${
+                    item.mastered ? 'border-emerald-200 bg-emerald-50/20' : 'border-purple-100'
+                }`;
+
+                const typeBadge = item.type === 'vocab'
+                    ? `<span class="bg-purple-100 text-purple-700 px-2 py-0.5 rounded-md font-bold text-xs">詞彙</span>`
+                    : `<span class="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-md font-bold text-xs">短語</span>`;
+
+                let audioButtons = '';
+                if (item.lang === 'en') {
+                    audioButtons = `
+                        <div class="flex flex-wrap items-center gap-1.5 pt-1">
+                            <button onclick="speakText('${escapeQuotes(item.text)}', 'en-US')" class="bg-purple-100 hover:bg-purple-200 text-purple-800 text-xs px-2.5 py-1.5 rounded-lg flex items-center gap-1 font-semibold">
+                                <i class="fa-solid fa-volume-high text-purple-600"></i> 英文發音
+                            </button>
+                            <button onclick="speakText('${escapeQuotes(item.meaning)}', 'zh-HK')" class="bg-amber-100 hover:bg-amber-200 text-amber-900 text-xs px-2.5 py-1.5 rounded-lg flex items-center gap-1" title="粵語">
+                                <i class="fa-solid fa-volume-low text-amber-700"></i> 意思 (粵語)
+                            </button>
+                            <button onclick="speakText('${escapeQuotes(item.meaning)}', 'zh-CN')" class="bg-rose-100 hover:bg-rose-200 text-rose-900 text-xs px-2.5 py-1.5 rounded-lg flex items-center gap-1" title="普通話">
+                                <i class="fa-solid fa-volume-low text-rose-700"></i> 意思 (普通話)
+                            </button>
+                        </div>`;
+                } else {
+                    audioButtons = `
+                        <div class="flex flex-wrap items-center gap-1.5 pt-1">
+                            <button onclick="speakText('${escapeQuotes(item.text)}', 'zh-HK')" class="bg-purple-100 hover:bg-purple-200 text-purple-800 text-xs px-2.5 py-1.5 rounded-lg flex items-center gap-1 font-semibold">
+                                <i class="fa-solid fa-volume-high text-purple-600"></i> 粵語發音
+                            </button>
+                            <button onclick="speakText('${escapeQuotes(item.text)}', 'zh-CN')" class="bg-rose-100 hover:bg-rose-200 text-rose-800 text-xs px-2.5 py-1.5 rounded-lg flex items-center gap-1 font-semibold">
+                                <i class="fa-solid fa-volume-high text-rose-600"></i> 普通話發音
+                            </button>
+                        </div>`;
+                }
+
+                card.innerHTML = `
+                    <div class="flex items-start justify-between gap-2">
+                        <div>
+                            <div class="flex items-center space-x-2 mb-1">
+                                ${typeBadge}
+                                <span class="text-xs text-slate-400 uppercase font-semibold">${item.lang}</span>
+                            </div>
+                            <h3 class="text-lg font-bold text-slate-900">${item.text}</h3>
+                            ${item.pinyin ? `<p class="text-xs font-semibold text-purple-600 mt-0.5">拼音: ${item.pinyin}</p>` : ''}
+                        </div>
+                        <button onclick="deleteVocabEntry('${item.id}')" class="text-slate-300 hover:text-rose-500 text-xs p-1">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
+                    </div>
+                    <div class="bg-slate-50 p-2.5 rounded-xl border border-slate-200/60 text-xs space-y-1">
+                        <span class="text-slate-400 font-bold block">意思 / Meaning:</span>
+                        <p class="text-slate-700 font-medium">${item.meaning}</p>
+                    </div>
+                    ${item.notes ? `<p class="text-xs text-slate-500 italic bg-amber-50/50 p-2 rounded-lg border border-amber-100/60">筆記: ${item.notes}</p>` : ''}
+                    ${audioButtons}
+                    <div class="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
+                        <label class="flex items-center space-x-2 cursor-pointer">
+                            <input type="checkbox" ${item.mastered ? 'checked' : ''} onchange="toggleVocabMastery('${item.id}')" class="w-4 h-4 text-purple-600 rounded focus:ring-purple-500">
+                            <span class="${item.mastered ? 'font-bold text-emerald-700' : 'text-slate-600 font-medium'}">已學會 / Mastered</span>
+                        </label>
+                        <span class="text-[10px] text-slate-400">${item.dateAdded || ''}</span>
+                    </div>`;
+                grid.appendChild(card);
+            });
+        }
+
+        function toggleVocabMastery(id) {
+            const item = vocabList.find(v => v.id === id);
+            if (item) {
+                item.mastered = !item.mastered;
+                saveVocabToStorage();
+                renderVocabList();
+                showToast(item.mastered ? '已標記為「已學會」！' : '重置為「學習中」');
+            }
+        }
+
+        function deleteVocabEntry(id) {
+            if (confirm('確定要刪除這筆生字/短語嗎？')) {
+                vocabList = vocabList.filter(v => v.id !== id);
+                saveVocabToStorage();
+                renderVocabList();
+                showToast('已刪除生字紀錄');
+            }
+        }
+
+        function speakText(text, langCode) {
+            if (!('speechSynthesis' in window)) {
+                alert('您的裝置或瀏覽器不支援語音播放。');
+                return;
+            }
+            window.speechSynthesis.cancel();
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.lang = langCode;
+            utterance.rate = 0.85;
+
+            const voices = window.speechSynthesis.getVoices();
+            if (voices.length > 0) {
+                // Prefer exact match, then language prefix
+                let target = voices.find(v => v.lang.replace('_', '-').toLowerCase() === langCode.toLowerCase());
+                if (!target) target = voices.find(v => v.lang.toLowerCase().startsWith(langCode.split('-')[0].toLowerCase()));
+                if (target) utterance.voice = target;
+            }
+            window.speechSynthesis.speak(utterance);
+        }
+
+        function escapeQuotes(str) {
+            return (str || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+        }
+    </script>
+</body>
+</html>
