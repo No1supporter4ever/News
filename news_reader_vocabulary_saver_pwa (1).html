@@ -1,0 +1,1519 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>新聞閱讀與詞彙學習庫 News Reader & Vocab Saver</title>
+  
+  <!-- PWA Web App Meta Tags -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="NewsReader" />
+  <link rel="apple-touch-icon" href="https://img.icons8.com/color/180/000000/open-book--v1.png" />
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <!-- Tesseract.js for Client-Side OCR -->
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  <!-- OpenCC for Simplified to Traditional Chinese conversion -->
+  <script src="https://cdn.jsdelivr.net/npm/opencc-js@1.0.5/dist/umd/full.min.js"></script>
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#faf5ff',
+              100: '#f3e8ff',
+              200: '#e9d5ff',
+              500: '#a855f7',
+              600: '#9333ea',
+              700: '#7e22ce',
+              800: '#6b21a8',
+              900: '#581c87',
+            }
+          },
+          fontFamily: {
+            sans: ['-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'PingFang TC', 'Traditional Chinese', 'Microsoft JhengHei', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    body {
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* Enable clean text selection inside reader container */
+    .selectable-text {
+      user-select: text !important;
+      -webkit-user-select: text !important;
+      -webkit-touch-callout: default !important;
+    }
+
+    /* Rainbow Color Highlights */
+    mark.highlight-red { background-color: #fecaca; color: #991b1b; }
+    mark.highlight-orange { background-color: #fed7aa; color: #9a3412; }
+    mark.highlight-yellow { background-color: #fef08a; color: #854d0e; }
+    mark.highlight-green { background-color: #bbf7d0; color: #166534; }
+    mark.highlight-cyan { background-color: #a5f3fc; color: #155e75; }
+    mark.highlight-blue { background-color: #bfdbfe; color: #1e40af; }
+    mark.highlight-purple { background-color: #e9d5ff; color: #6b21a8; }
+    mark.highlight-pink { background-color: #fbcfe8; color: #9d174d; }
+
+    mark.custom-highlight {
+      padding: 1px 4px;
+      border-radius: 4px;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+      transition: opacity 0.2s;
+    }
+    mark.custom-highlight:hover {
+      opacity: 0.85;
+    }
+
+    /* Clean UI scrollbars */
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  </style>
+</head>
+<body class="bg-purple-50/40 text-slate-800 font-sans min-h-screen flex flex-col antialiased selection:bg-purple-200 selection:text-purple-900">
+
+  <!-- Top Navigation Bar -->
+  <header class="bg-white border-b border-purple-100 sticky top-0 z-30 shadow-sm px-4 py-3 md:px-8 flex items-center justify-between">
+    <div class="flex items-center space-x-3">
+      <div class="w-10 h-10 rounded-2xl bg-brand-600 text-white flex items-center justify-center font-bold text-xl shadow-md shadow-purple-200">
+        <i class="fa-solid fa-book-open-reader"></i>
+      </div>
+      <div>
+        <h1 class="font-bold text-lg md:text-xl text-slate-800 leading-tight">雙語新聞與詞彙學習庫</h1>
+        <p class="text-xs text-brand-600 font-semibold">Bilingual News Reader & Vocab Saver</p>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="flex-1 max-w-7xl w-full mx-auto p-3 md:p-6 flex flex-col gap-6">
+    
+    <!-- Tab Navigation Bar -->
+    <nav class="flex bg-white p-1.5 rounded-2xl shadow-sm border border-purple-100 overflow-x-auto no-scrollbar">
+      <button onclick="switchTab('reader')" id="tabBtn-reader" class="flex-1 py-2.5 px-4 rounded-xl text-sm md:text-base font-bold flex items-center justify-center space-x-2 transition-all bg-brand-600 text-white shadow-sm">
+        <i class="fa-solid fa-newspaper"></i>
+        <span>閱讀新聞 Read News</span>
+      </button>
+      <button onclick="switchTab('upload')" id="tabBtn-upload" class="flex-1 py-2.5 px-4 rounded-xl text-sm md:text-base font-bold flex items-center justify-center space-x-2 text-slate-600 hover:bg-purple-50 transition-all">
+        <i class="fa-solid fa-cloud-arrow-up text-brand-500"></i>
+        <span>新增/上傳新聞 Add News</span>
+      </button>
+      <button onclick="switchTab('vocab')" id="tabBtn-vocab" class="flex-1 py-2.5 px-4 rounded-xl text-sm md:text-base font-bold flex items-center justify-center space-x-2 text-slate-600 hover:bg-purple-50 transition-all">
+        <i class="fa-solid fa-bookmark text-brand-500"></i>
+        <span>生字/詞組庫 Bank</span>
+        <span id="bookmarkCountBadge" class="ml-1 bg-purple-100 text-brand-800 text-xs px-2 py-0.5 rounded-full font-extrabold">0</span>
+      </button>
+    </nav>
+
+    <!-- TAB 1: READ NEWS SECTION -->
+    <section id="tab-reader" class="space-y-6">
+      <!-- Search & Filters -->
+      <div class="bg-white p-4 rounded-2xl border border-purple-100 shadow-sm flex flex-col gap-3">
+        <div class="flex flex-col md:flex-row justify-between items-stretch md:items-center gap-3">
+          <!-- Language Filter -->
+          <div class="flex bg-slate-100 p-1 rounded-xl">
+            <button onclick="setLangFilter('all')" id="langFilter-all" class="flex-1 md:flex-initial px-3.5 py-1.5 rounded-lg text-xs md:text-sm font-bold bg-white text-slate-800 shadow-sm">全部 All</button>
+            <button onclick="setLangFilter('en')" id="langFilter-en" class="flex-1 md:flex-initial px-3.5 py-1.5 rounded-lg text-xs md:text-sm font-bold text-slate-600 hover:text-slate-800">English 🇬🇧</button>
+            <button onclick="setLangFilter('zh')" id="langFilter-zh" class="flex-1 md:flex-initial px-3.5 py-1.5 rounded-lg text-xs md:text-sm font-bold text-slate-600 hover:text-slate-800">繁體中文 🇭🇰🇹🇼</button>
+          </div>
+
+          <!-- Read / Unread Status Filter -->
+          <div class="flex bg-purple-50/80 p-1 rounded-xl border border-purple-100">
+            <button onclick="setReadStatusFilter('all')" id="readFilter-all" class="flex-1 md:flex-initial px-3.5 py-1.5 rounded-lg text-xs md:text-sm font-bold bg-white text-brand-800 shadow-sm">全部狀態</button>
+            <button onclick="setReadStatusFilter('unread')" id="readFilter-unread" class="flex-1 md:flex-initial px-3.5 py-1.5 rounded-lg text-xs md:text-sm font-bold text-slate-600 hover:text-brand-700">未閱讀 Unread</button>
+            <button onclick="setReadStatusFilter('read')" id="readFilter-read" class="flex-1 md:flex-initial px-3.5 py-1.5 rounded-lg text-xs md:text-sm font-bold text-slate-600 hover:text-brand-700">已閱讀 Read</button>
+          </div>
+        </div>
+
+        <!-- Category Pills -->
+        <div id="categoryPillContainer" class="flex items-center gap-2 overflow-x-auto w-full no-scrollbar pt-1 border-t border-slate-100">
+          <!-- Dynamic Category Pills -->
+        </div>
+      </div>
+
+      <!-- Articles Grid -->
+      <div id="articleGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <!-- Dynamic Articles List Cards -->
+      </div>
+
+      <!-- Single Article Reader View -->
+      <div id="articleDetailView" class="hidden bg-white rounded-3xl border border-purple-100 shadow-lg p-6 md:p-10 relative">
+        <!-- Top Controls -->
+        <div class="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-slate-100 mb-6">
+          <button onclick="closeArticleDetail()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-sm flex items-center space-x-2">
+            <i class="fa-solid fa-arrow-left"></i>
+            <span>返回新聞列表</span>
+          </button>
+          
+          <div class="flex items-center space-x-2 md:space-x-3">
+            <!-- Mark as Read Toggle Button -->
+            <button id="toggleReadStatusBtn" onclick="toggleCurrentArticleReadStatus()" class="px-3.5 py-2 rounded-xl text-sm font-bold flex items-center space-x-2 transition-all bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100">
+              <i id="toggleReadIcon" class="fa-regular fa-circle-check"></i>
+              <span id="toggleReadText">標記為已閱讀</span>
+            </button>
+
+            <!-- Text Size Controls -->
+            <div class="flex items-center bg-purple-50 rounded-xl p-1 space-x-1 border border-purple-100">
+              <button onclick="adjustFontSize(-2)" class="w-8 h-8 rounded-lg bg-white shadow-sm flex items-center justify-center font-bold text-sm text-brand-700">A-</button>
+              <button onclick="adjustFontSize(2)" class="w-8 h-8 rounded-lg bg-white shadow-sm flex items-center justify-center font-bold text-lg text-brand-700">A+</button>
+            </div>
+
+            <!-- Speak Article Button -->
+            <button onclick="speakFullArticle()" class="px-3.5 py-2 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl text-sm flex items-center space-x-2 shadow-sm">
+              <i class="fa-solid fa-volume-high"></i>
+              <span class="hidden md:inline">朗讀 Full Read</span>
+            </button>
+
+            <!-- Delete Article Button -->
+            <button onclick="deleteCurrentArticle()" title="刪除文章" class="px-3 py-2 bg-rose-50 text-rose-600 hover:bg-rose-100 font-bold rounded-xl text-sm">
+              <i class="fa-solid fa-trash-can"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- Article Content -->
+        <div class="max-w-3xl mx-auto space-y-4">
+          <div class="flex flex-wrap items-center gap-2">
+            <span id="readerLangBadge" class="px-2.5 py-1 rounded-md text-xs font-extrabold uppercase bg-purple-100 text-purple-800">EN</span>
+            <span id="readerCategoryBadge" class="px-2.5 py-1 rounded-md text-xs font-bold bg-slate-100 text-slate-600">科學與太空</span>
+            <span id="readerReadBadge" class="px-2.5 py-1 rounded-md text-xs font-extrabold bg-emerald-100 text-emerald-800 flex items-center gap-1">
+              <i class="fa-solid fa-check"></i> 已閱讀
+            </span>
+            <span id="readerDateBadge" class="text-xs text-slate-400">Oct 21, 2026</span>
+          </div>
+
+          <h1 id="readerTitle" class="text-2xl md:text-3xl font-extrabold text-slate-900 leading-snug">
+            Article Title
+          </h1>
+
+          <!-- Article Image -->
+          <div id="readerImageContainer" class="hidden my-4 rounded-2xl overflow-hidden border border-slate-200 max-h-80">
+            <img id="readerImg" class="w-full h-full object-cover" src="" alt="Article photo" />
+          </div>
+
+          <div id="readerInstruction" class="p-3 bg-purple-50 border border-purple-200 rounded-xl text-xs text-purple-900 flex items-center space-x-2">
+            <i class="fa-solid fa-rainbow text-brand-600 text-base"></i>
+            <span><strong>劃線提示：</strong> 用手指或游標自由拖曳選取單字、短語或句子，即可彈出彩虹螢光筆選擇顏色與儲存！</span>
+          </div>
+
+          <!-- Selectable Article Body Container -->
+          <div id="readerBody" class="selectable-text text-slate-800 leading-relaxed font-sans text-lg md:text-xl space-y-4 pt-2">
+            <!-- Dynamic Parsed Article Content -->
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 2: ADD / UPLOAD NEWS SECTION -->
+    <section id="tab-upload" class="hidden space-y-6">
+      <div class="bg-white rounded-3xl border border-purple-100 shadow-md p-6 md:p-8 max-w-3xl mx-auto">
+        <div class="flex items-center space-x-3 mb-6 pb-4 border-b border-slate-100">
+          <div class="w-10 h-10 rounded-xl bg-brand-600 text-white flex items-center justify-center font-bold text-lg">
+            <i class="fa-solid fa-newspaper"></i>
+          </div>
+          <div>
+            <h2 class="text-xl font-bold text-slate-800">新增或上傳新聞文章</h2>
+            <p class="text-xs text-slate-500">拍攝/上傳報紙相片進行 OCR 光學辨識，亦可直接貼上文字。</p>
+          </div>
+        </div>
+
+        <form id="uploadArticleForm" onsubmit="handleArticleSubmit(event)" class="space-y-5">
+          <!-- Title & Language -->
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">文章標題 Article Title *</label>
+              <input type="text" id="inputTitle" required placeholder="例如: 熊貓返港新動向 / Space Exploration" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:border-brand-500 focus:ring-2 focus:ring-purple-200 outline-none text-slate-800 text-sm font-medium" />
+            </div>
+
+            <div>
+              <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">語言 Language *</label>
+              <select id="inputLanguage" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:border-brand-500 focus:ring-2 focus:ring-purple-200 outline-none text-slate-800 text-sm font-medium bg-white">
+                <option value="zh">繁體中文 (Traditional Chinese)</option>
+                <option value="en">English (英文)</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Category Selection -->
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">分類 Category *</label>
+              <select id="inputCategorySelect" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:border-brand-500 focus:ring-2 focus:ring-purple-200 outline-none text-slate-800 text-sm font-medium bg-white">
+                <option value="科學與太空 Science">科學與太空 Science</option>
+                <option value="自然與動物 Animals">自然與動物 Animals</option>
+                <option value="環球新聞 World">環球新聞 World</option>
+                <option value="文化與歷史 Culture">文化與歷史 Culture</option>
+                <option value="+new">+ 自訂新分類 Add New Category...</option>
+              </select>
+            </div>
+
+            <div id="customCategoryGroup" class="hidden">
+              <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">自訂分類名稱 New Category</label>
+              <input type="text" id="inputCustomCategory" placeholder="例如: 體育新聞 / Sports" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:border-brand-500 focus:ring-2 focus:ring-purple-200 outline-none text-slate-800 text-sm font-medium" />
+            </div>
+          </div>
+
+          <!-- Photo Capture & OCR Trigger -->
+          <div class="border-2 border-dashed border-purple-200 rounded-2xl p-4 md:p-6 bg-purple-50/40 text-center space-y-3">
+            <div class="flex justify-center items-center space-x-3">
+              <label class="cursor-pointer px-5 py-2.5 bg-brand-600 hover:bg-brand-700 text-white rounded-xl font-bold text-sm shadow-sm flex items-center space-x-2 transition-all">
+                <i class="fa-solid fa-camera"></i>
+                <span>拍照 / 上傳新聞圖片 (OCR 辨識)</span>
+                <input type="file" id="imageInput" accept="image/*" class="hidden" onchange="processImageOCR(this)" />
+              </label>
+            </div>
+            <p class="text-xs text-slate-500">支援實體報紙、剪報或螢幕截圖。中文圖片文字將自動轉換為繁體字！</p>
+
+            <!-- OCR Progress Bar -->
+            <div id="ocrProgressArea" class="hidden space-y-2 pt-2">
+              <div class="flex items-center justify-between text-xs font-bold text-brand-800">
+                <span id="ocrStatusText"><i class="fa-solid fa-spinner fa-spin mr-1"></i> 正進行辨識與繁體轉換中...</span>
+                <span id="ocrPercent">0%</span>
+              </div>
+              <div class="w-full bg-purple-100 rounded-full h-2 overflow-hidden">
+                <div id="ocrProgressBar" class="bg-brand-600 h-2 rounded-full w-0 transition-all duration-300"></div>
+              </div>
+            </div>
+
+            <div id="imagePreviewBox" class="hidden mt-3 max-h-48 rounded-xl overflow-hidden border border-slate-200 mx-auto">
+              <img id="imagePreview" src="" class="max-h-48 mx-auto object-contain" alt="Selected news image" />
+            </div>
+          </div>
+
+          <!-- Article Text Body Editor -->
+          <div>
+            <div class="flex items-center justify-between mb-1">
+              <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider">文章內文 Content *</label>
+              <button type="button" onclick="convertEditorToTraditional()" class="text-xs font-bold text-brand-600 hover:underline">
+                <i class="fa-solid fa-language mr-1"></i>一鍵轉換為繁體字
+              </button>
+            </div>
+            <textarea id="inputBody" rows="8" required placeholder="從照片提取或手動輸入的文章內容將顯示於此..." class="w-full p-4 rounded-xl border border-slate-200 focus:border-brand-500 focus:ring-2 focus:ring-purple-200 outline-none text-slate-800 text-sm md:text-base leading-relaxed font-sans"></textarea>
+          </div>
+
+          <!-- Submit Button -->
+          <div class="flex justify-end pt-2">
+            <button type="submit" class="w-full md:w-auto px-8 py-3 bg-brand-600 hover:bg-brand-700 text-white font-extrabold rounded-xl shadow-md flex items-center justify-center space-x-2 text-base">
+              <i class="fa-solid fa-check"></i>
+              <span>儲存並發佈新聞 Save & Publish</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <!-- TAB 3: VOCABULARY & PHRASES BOOKMARKS -->
+    <section id="tab-vocab" class="hidden space-y-6">
+      <!-- Sub Tab Filter Header -->
+      <div class="bg-white p-4 rounded-2xl border border-purple-100 shadow-sm flex flex-col gap-4">
+        
+        <!-- Type Filter (生字 Vocabulary vs 詞組 Phrases) -->
+        <div class="flex flex-col md:flex-row justify-between items-center gap-3">
+          <div class="flex bg-slate-100 p-1 rounded-xl w-full md:w-auto">
+            <button onclick="setVocabType('words')" id="vocabType-words" class="flex-1 md:flex-initial px-5 py-2 rounded-lg text-sm font-bold bg-white text-slate-800 shadow-sm flex items-center justify-center space-x-2">
+              <i class="fa-solid fa-spell-check text-brand-600"></i>
+              <span>生字 Vocabulary</span>
+              <span id="wordCountBadge" class="bg-slate-200 text-slate-700 text-xs px-2 py-0.5 rounded-full">0</span>
+            </button>
+            <button onclick="setVocabType('phrases')" id="vocabType-phrases" class="flex-1 md:flex-initial px-5 py-2 rounded-lg text-sm font-bold text-slate-600 hover:text-slate-800 flex items-center justify-center space-x-2">
+              <i class="fa-solid fa-quote-left text-brand-600"></i>
+              <span>詞組 Phrases</span>
+              <span id="phraseCountBadge" class="bg-slate-200 text-slate-700 text-xs px-2 py-0.5 rounded-full">0</span>
+            </button>
+          </div>
+
+          <!-- Mastery State Sub-Tabs -->
+          <div class="flex bg-purple-50 p-1 rounded-xl w-full md:w-auto border border-purple-100">
+            <button onclick="setMasteryTab('learning')" id="masteryTab-learning" class="flex-1 md:flex-initial px-4 py-1.5 rounded-lg text-xs md:text-sm font-extrabold bg-brand-600 text-white shadow-sm flex items-center justify-center space-x-1.5">
+              <i class="fa-solid fa-book-open"></i>
+              <span>學習中 In Progress</span>
+              <span id="learningCountBadge" class="bg-purple-800/40 text-white text-xs px-2 py-0.5 rounded-full ml-1">0</span>
+            </button>
+            <button onclick="setMasteryTab('mastered')" id="masteryTab-mastered" class="flex-1 md:flex-initial px-4 py-1.5 rounded-lg text-xs md:text-sm font-extrabold text-slate-600 hover:text-brand-800 flex items-center justify-center space-x-1.5">
+              <i class="fa-solid fa-circle-check text-emerald-500"></i>
+              <span>已學會 Mastered</span>
+              <span id="masteredCountBadge" class="bg-emerald-100 text-emerald-800 text-xs px-2 py-0.5 rounded-full ml-1">0</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bookmarks List -->
+      <div id="bookmarksList" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <!-- Dynamic Bookmarks Cards -->
+      </div>
+
+      <div id="emptyVocabState" class="hidden text-center py-16 bg-white rounded-3xl border border-dashed border-purple-200 p-6">
+        <div class="w-16 h-16 bg-purple-100 text-brand-600 rounded-full flex items-center justify-center mx-auto mb-3 text-2xl">
+          <i class="fa-solid fa-star"></i>
+        </div>
+        <h3 id="emptyStateTitle" class="text-lg font-bold text-slate-800">暫無已儲存的內容</h3>
+        <p id="emptyStateSub" class="text-sm text-slate-500 max-w-md mx-auto mt-1">在閱讀新聞時選取文字，用彩虹螢光筆劃上記號，建立專屬的學習庫！</p>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Precise Floating Rainbow Highlight Popover -->
+  <div id="highlightPopover" class="hidden fixed z-50 bg-slate-900 text-white rounded-2xl shadow-2xl p-3.5 border border-slate-700 transform -translate-x-1/2 transition-all duration-100 w-80" style="top: 0px; left: 0px;">
+    <div class="text-xs font-bold text-purple-300 mb-2 flex items-center justify-between">
+      <span id="selectedTextPreview" class="truncate max-w-[220px] block font-medium">"Selected text"</span>
+      <button onclick="closePopover()" class="text-slate-400 hover:text-white p-1"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+
+    <!-- 8 Rainbow Palette Colors -->
+    <div class="mb-3">
+      <span class="text-[10px] uppercase font-bold text-slate-400 block mb-1">選擇螢光筆顏色 Color:</span>
+      <div class="flex items-center justify-between gap-1 p-1 bg-slate-800 rounded-xl">
+        <button onclick="selectHighlightColor('red')" id="colorBtn-red" class="w-6 h-6 rounded-full bg-red-400 transition-transform" title="Red"></button>
+        <button onclick="selectHighlightColor('orange')" id="colorBtn-orange" class="w-6 h-6 rounded-full bg-orange-400 transition-transform" title="Orange"></button>
+        <button onclick="selectHighlightColor('yellow')" id="colorBtn-yellow" class="w-6 h-6 rounded-full bg-yellow-300 ring-2 ring-white scale-110 transition-transform" title="Yellow"></button>
+        <button onclick="selectHighlightColor('green')" id="colorBtn-green" class="w-6 h-6 rounded-full bg-green-400 transition-transform" title="Green"></button>
+        <button onclick="selectHighlightColor('cyan')" id="colorBtn-cyan" class="w-6 h-6 rounded-full bg-cyan-300 transition-transform" title="Cyan"></button>
+        <button onclick="selectHighlightColor('blue')" id="colorBtn-blue" class="w-6 h-6 rounded-full bg-blue-400 transition-transform" title="Blue"></button>
+        <button onclick="selectHighlightColor('purple')" id="colorBtn-purple" class="w-6 h-6 rounded-full bg-purple-400 transition-transform" title="Purple"></button>
+        <button onclick="selectHighlightColor('pink')" id="colorBtn-pink" class="w-6 h-6 rounded-full bg-pink-400 transition-transform" title="Pink"></button>
+      </div>
+    </div>
+
+    <div class="flex items-center space-x-2 pt-1 border-t border-slate-800">
+      <button onclick="saveSelectedHighlight('word')" class="flex-1 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg font-bold text-xs flex items-center justify-center space-x-1 shadow-sm">
+        <i class="fa-solid fa-spell-check"></i>
+        <span>儲存生字 Word</span>
+      </button>
+      <button onclick="saveSelectedHighlight('phrase')" class="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-xs flex items-center justify-center space-x-1 shadow-sm">
+        <i class="fa-solid fa-quote-right"></i>
+        <span>儲存詞組 Phrase</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Bookmark Detail / Note Modal -->
+  <div id="bookmarkModal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-purple-100 space-y-4 max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between pb-2 border-b border-slate-100">
+        <h3 id="modalTitle" class="font-extrabold text-lg text-slate-800">新增至生字/詞組庫</h3>
+        <button onclick="closeBookmarkModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+
+      <div class="space-y-3">
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">已選取文字 Selected Text</label>
+            <span id="modalLangTypeBadge" class="text-[10px] font-extrabold px-2 py-0.5 rounded bg-purple-100 text-purple-800">CHINESE</span>
+          </div>
+          <div class="flex items-center justify-between bg-purple-50 p-3 rounded-xl border border-purple-200">
+            <p id="modalSelectedText" class="text-base font-extrabold text-brand-800 break-words max-h-24 overflow-y-auto leading-snug"></p>
+            <span id="modalColorBadge" class="w-5 h-5 rounded-full bg-yellow-300 shadow-sm shrink-0 ml-2"></span>
+          </div>
+        </div>
+
+        <!-- Audio Pronunciation Test in Modal -->
+        <div class="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+          <label class="block text-[11px] font-bold text-slate-600 uppercase tracking-wider">發音試聽 Audio Pronunciation</label>
+          <div id="modalAudioButtons" class="flex flex-wrap gap-2">
+            <!-- Dynamic Audio Buttons -->
+          </div>
+        </div>
+
+        <!-- Dynamic Chinese Pinyin (For Chinese words) -->
+        <div id="pinyinFieldGroup">
+          <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">普通話拼音 Mandarin Pinyin</label>
+          <input type="text" id="modalPinyin" placeholder="例如: wēi zhòng lì / tàn suǒ" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm font-medium focus:border-brand-500 outline-none" />
+        </div>
+
+        <!-- Definition & Meaning -->
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <label id="modalDefLabel" class="block text-xs font-bold text-slate-500 uppercase tracking-wider">釋義與翻譯 Definition & Meaning</label>
+            <button type="button" onclick="autoLookupDefinition()" class="text-xs font-bold text-brand-600 hover:underline flex items-center gap-1">
+              <i class="fa-solid fa-wand-magic-sparkles"></i> 自動字典查詞
+            </button>
+          </div>
+          <textarea id="modalNote" rows="3" placeholder="載入中或自行填寫翻譯/釋義..." class="w-full p-3 rounded-xl border border-slate-200 text-sm font-medium leading-relaxed focus:border-brand-500 outline-none"></textarea>
+        </div>
+      </div>
+
+      <div class="flex justify-end space-x-2 pt-2">
+        <button onclick="closeBookmarkModal()" class="px-4 py-2 rounded-xl font-bold text-slate-600 hover:bg-slate-100 text-sm">取消</button>
+        <button onclick="confirmSaveBookmark()" class="px-5 py-2 rounded-xl font-bold bg-brand-600 hover:bg-brand-700 text-white shadow-md text-sm">儲存紀錄 Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification System -->
+  <div id="toast" class="fixed bottom-6 right-6 z-50 bg-slate-900 text-white px-5 py-3 rounded-2xl shadow-xl font-bold text-sm flex items-center space-x-2 transform translate-y-20 opacity-0 transition-all duration-300 pointer-events-none">
+    <i id="toastIcon" class="fa-solid fa-circle-check text-purple-400"></i>
+    <span id="toastMsg">已完成更新！</span>
+  </div>
+
+  <!-- JAVASCRIPT APP LOGIC -->
+  <script>
+    const STORAGE_KEY_ARTICLES = 'news_articles_unified_v4';
+    const STORAGE_KEY_BOOKMARKS = 'news_bookmarks_unified_v4';
+    const STORAGE_KEY_CATEGORIES = 'news_categories_unified_v4';
+
+    let openCCConverter = null;
+
+    let currentTab = 'reader';
+    let currentLangFilter = 'all';
+    let currentReadStatusFilter = 'all'; // 'all', 'unread', 'read'
+    let currentCategoryFilter = 'all';
+    
+    let currentVocabType = 'words'; // 'words', 'phrases'
+    let currentMasteryTab = 'learning'; // 'learning', 'mastered'
+    
+    let currentFontSize = 18; // px
+
+    let selectedHighlightText = '';
+    let selectedHighlightType = 'word';
+    let selectedHighlightColor = 'yellow';
+    let currentArticleId = null;
+    let savedSelectionRange = null;
+
+    // Built-in offline quick bilingual dictionary map
+    const builtInDictionary = {
+      // English -> Traditional Chinese
+      'thriving': '蓬勃發展，茁壯成長',
+      'ecological': '生態的',
+      'conservation': '保育，保護',
+      'efforts': '努力，成果',
+      'survey': '調查，統計',
+      'endangered': '瀕危的',
+      'species': '物種，生物',
+      'microgravity': '微重力環境',
+      'breakthrough': '突破性的',
+      'exploration': '探索，開拓',
+      'achievement': '卓越成就',
+      'inspiring': '令人鼓舞的',
+      'delightful': '令人歡喜的',
+      'infrared': '紅外線的',
+      'footage': '影片片段',
+
+      // Chinese -> English & Pinyin
+      '微重力': { en: 'Microgravity', pinyin: 'wēi zhòng lì' },
+      '突破性的研究': { en: 'Breakthrough research', pinyin: 'tū pò xìng de yán jiū' },
+      '生態保育': { en: 'Ecological conservation', pinyin: 'shēng tài bǎo yù' },
+      '探索': { en: 'Exploration', pinyin: 'tàn suǒ' },
+      '航天員': { en: 'Astronauts', pinyin: 'háng tiān yuán' },
+      '瀕危物種': { en: 'Endangered species', pinyin: 'bīn wēi wù zhǒng' },
+      '蓬勃發展': { en: 'Thriving / Flourishing', pinyin: 'péng bó fā zhǎn' }
+    };
+
+    // Initial Seed Articles
+    const initialArticles = [
+      {
+        id: 'art-1',
+        title: '中國空間站迎來全新科學實驗項目',
+        language: 'zh',
+        category: '科學與太空 Science',
+        date: 'Oct 21, 2026',
+        body: `天宮空間站的航天員們近期在微重力環境下，成功開展了一系列全新的科學實驗。\n\n這些突破性的研究將幫助科學家更好地了解植物在太空中的生長規律，以及材料在地球大氣層外性質的變化。全國各地的學生們透過直播課堂，充滿好奇與熱情地觀看了這堂精彩的太空科學課。`,
+        imageUrl: '',
+        isRead: false
+      },
+      {
+        id: 'art-2',
+        title: 'Wild Pandas Thriving in Protected Bamboo Forests',
+        language: 'en',
+        category: '自然與動物 Animals',
+        date: 'Oct 20, 2026',
+        body: `According to the latest wildlife survey, wild giant panda populations are steadily growing thanks to ecological conservation efforts.\n\nForest rangers in Sichuan captured delightful infrared footage showing mother pandas playing leisurely with their playful cubs among lush green bamboo groves. This remarkable achievement showcases the inspiring results of protecting rare endangered species.`,
+        imageUrl: '',
+        isRead: true
+      }
+    ];
+
+    // Initial Seed Bookmarks (With Chinese meanings, Cantonese/Mandarin audio support, Pinyin, and English meanings)
+    const initialBookmarks = [
+      {
+        id: 'bm-1',
+        text: '微重力',
+        type: 'word',
+        color: 'purple',
+        language: 'zh',
+        articleId: 'art-1',
+        pinyin: 'wēi zhòng lì',
+        note: 'Microgravity (太空極微弱的重力環境)',
+        mastered: false,
+        date: 'Oct 21, 2026'
+      },
+      {
+        id: 'bm-2',
+        text: 'thriving',
+        type: 'word',
+        color: 'green',
+        language: 'en',
+        articleId: 'art-2',
+        pinyin: '',
+        note: '茁壯成長，蓬勃發展',
+        mastered: true,
+        date: 'Oct 20, 2026'
+      },
+      {
+        id: 'bm-3',
+        text: '突破性的研究',
+        type: 'phrase',
+        color: 'red',
+        language: 'zh',
+        articleId: 'art-1',
+        pinyin: 'tū pò xìng de yán jiū',
+        note: 'Breakthrough research (具有重大創新的科學探索)',
+        mastered: false,
+        date: 'Oct 21, 2026'
+      },
+      {
+        id: 'bm-4',
+        text: 'ecological conservation efforts',
+        type: 'phrase',
+        color: 'blue',
+        language: 'en',
+        articleId: 'art-2',
+        pinyin: '',
+        note: '生態保育工作與努力',
+        mastered: true,
+        date: 'Oct 20, 2026'
+      }
+    ];
+
+    const defaultCategories = ['科學與太空 Science', '自然與動物 Animals', '環球新聞 World', '文化與歷史 Culture'];
+
+    // Initialize Application
+    window.onload = function() {
+      initOpenCC();
+      initData();
+      renderCategoryPills();
+      renderArticles();
+      renderBookmarks();
+      setupNativeSelectionListeners();
+
+      document.getElementById('inputCategorySelect').addEventListener('change', function(e) {
+        const customGroup = document.getElementById('customCategoryGroup');
+        if (e.target.value === '+new') {
+          customGroup.classList.remove('hidden');
+        } else {
+          customGroup.classList.add('hidden');
+        }
+      });
+
+      // Warm up Speech Synthesis voices
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.getVoices();
+        window.speechSynthesis.onvoiceschanged = () => { window.speechSynthesis.getVoices(); };
+      }
+    };
+
+    function initOpenCC() {
+      try {
+        if (window.OpenCC) {
+          openCCConverter = window.OpenCC.Converter({ from: 'cn', to: 'hk' });
+        }
+      } catch (e) {
+        console.warn('OpenCC fallback activated');
+      }
+    }
+
+    function convertToTraditional(text) {
+      if (!text) return '';
+      if (openCCConverter) {
+        return openCCConverter(text);
+      }
+      return text;
+    }
+
+    function convertEditorToTraditional() {
+      const textarea = document.getElementById('inputBody');
+      textarea.value = convertToTraditional(textarea.value);
+      showToast('已轉換為繁體字！');
+    }
+
+    function initData() {
+      if (!localStorage.getItem(STORAGE_KEY_ARTICLES)) {
+        localStorage.setItem(STORAGE_KEY_ARTICLES, JSON.stringify(initialArticles));
+      }
+      if (!localStorage.getItem(STORAGE_KEY_BOOKMARKS)) {
+        localStorage.setItem(STORAGE_KEY_BOOKMARKS, JSON.stringify(initialBookmarks));
+      }
+      if (!localStorage.getItem(STORAGE_KEY_CATEGORIES)) {
+        localStorage.setItem(STORAGE_KEY_CATEGORIES, JSON.stringify(defaultCategories));
+      }
+    }
+
+    function getArticles() {
+      return JSON.parse(localStorage.getItem(STORAGE_KEY_ARTICLES)) || [];
+    }
+    function saveArticles(articles) {
+      localStorage.setItem(STORAGE_KEY_ARTICLES, JSON.stringify(articles));
+      renderArticles();
+    }
+
+    function getBookmarks() {
+      return JSON.parse(localStorage.getItem(STORAGE_KEY_BOOKMARKS)) || [];
+    }
+    function saveBookmarks(bookmarks) {
+      localStorage.setItem(STORAGE_KEY_BOOKMARKS, JSON.stringify(bookmarks));
+      renderBookmarks();
+      if (currentArticleId) {
+        renderArticleDetail(currentArticleId);
+      }
+    }
+
+    function getCategories() {
+      return JSON.parse(localStorage.getItem(STORAGE_KEY_CATEGORIES)) || defaultCategories;
+    }
+    function addCategory(cat) {
+      const cats = getCategories();
+      if (!cats.includes(cat)) {
+        cats.push(cat);
+        localStorage.setItem(STORAGE_KEY_CATEGORIES, JSON.stringify(cats));
+        renderCategoryPills();
+        updateCategoryDropdown();
+      }
+    }
+
+    // Helper to detect if text contains Chinese characters
+    function containsChinese(text) {
+      return /[\u4e00-\u9fa5]/.test(text);
+    }
+
+    // Tab Switcher
+    function switchTab(tab) {
+      currentTab = tab;
+      document.getElementById('tab-reader').classList.add('hidden');
+      document.getElementById('tab-upload').classList.add('hidden');
+      document.getElementById('tab-vocab').classList.add('hidden');
+
+      ['reader', 'upload', 'vocab'].forEach(t => {
+        const btn = document.getElementById(`tabBtn-${t}`);
+        if (btn) {
+          btn.className = 'flex-1 py-2.5 px-4 rounded-xl text-sm md:text-base font-bold flex items-center justify-center space-x-2 text-slate-600 hover:bg-purple-50 transition-all';
+        }
+      });
+
+      const activeBtn = document.getElementById(`tabBtn-${tab}`);
+      if (activeBtn) {
+        activeBtn.className = 'flex-1 py-2.5 px-4 rounded-xl text-sm md:text-base font-bold flex items-center justify-center space-x-2 transition-all bg-brand-600 text-white shadow-sm';
+      }
+
+      document.getElementById(`tab-${tab}`).classList.remove('hidden');
+      closePopover();
+    }
+
+    function renderCategoryPills() {
+      const container = document.getElementById('categoryPillContainer');
+      const categories = getCategories();
+
+      let html = `
+        <button onclick="setCategoryFilter('all')" class="px-3.5 py-1 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${currentCategoryFilter === 'all' ? 'bg-brand-600 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}">
+          所有分類 All
+        </button>
+      `;
+
+      categories.forEach(cat => {
+        const active = currentCategoryFilter === cat;
+        html += `
+          <button onclick="setCategoryFilter('${cat}')" class="px-3.5 py-1 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${active ? 'bg-brand-600 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}">
+            ${cat}
+          </button>
+        `;
+      });
+
+      container.innerHTML = html;
+      updateCategoryDropdown();
+    }
+
+    function updateCategoryDropdown() {
+      const select = document.getElementById('inputCategorySelect');
+      const cats = getCategories();
+      let html = '';
+      cats.forEach(c => {
+        html += `<option value="${c}">${c}</option>`;
+      });
+      html += `<option value="+new">+ 自訂新分類 Add New Category...</option>`;
+      select.innerHTML = html;
+    }
+
+    function setLangFilter(lang) {
+      currentLangFilter = lang;
+      ['all', 'en', 'zh'].forEach(l => {
+        const btn = document.getElementById(`langFilter-${l}`);
+        if (l === lang) {
+          btn.className = 'flex-1 md:flex-initial px-3.5 py-1.5 rounded-lg text-xs md:text-sm font-bold bg-white text-slate-800 shadow-sm';
+        } else {
+          btn.className = 'flex-1 md:flex-initial px-3.5 py-1.5 rounded-lg text-xs md:text-sm font-bold text-slate-600 hover:text-slate-800';
+        }
+      });
+      renderArticles();
+    }
+
+    function setReadStatusFilter(status) {
+      currentReadStatusFilter = status;
+      ['all', 'unread', 'read'].forEach(s => {
+        const btn = document.getElementById(`readFilter-${s}`);
+        if (s === status) {
+          btn.className = 'flex-1 md:flex-initial px-3.5 py-1.5 rounded-lg text-xs md:text-sm font-bold bg-white text-brand-800 shadow-sm';
+        } else {
+          btn.className = 'flex-1 md:flex-initial px-3.5 py-1.5 rounded-lg text-xs md:text-sm font-bold text-slate-600 hover:text-brand-700';
+        }
+      });
+      renderArticles();
+    }
+
+    function setCategoryFilter(cat) {
+      currentCategoryFilter = cat;
+      renderCategoryPills();
+      renderArticles();
+    }
+
+    function renderArticles() {
+      const grid = document.getElementById('articleGrid');
+      const detail = document.getElementById('articleDetailView');
+      grid.classList.remove('hidden');
+      detail.classList.add('hidden');
+
+      let articles = getArticles();
+
+      if (currentLangFilter !== 'all') {
+        articles = articles.filter(a => a.language === currentLangFilter);
+      }
+      if (currentReadStatusFilter === 'read') {
+        articles = articles.filter(a => a.isRead === true);
+      } else if (currentReadStatusFilter === 'unread') {
+        articles = articles.filter(a => !a.isRead);
+      }
+      if (currentCategoryFilter !== 'all') {
+        articles = articles.filter(a => a.category === currentCategoryFilter);
+      }
+
+      if (articles.length === 0) {
+        grid.innerHTML = `
+          <div class="col-span-full py-12 text-center bg-white rounded-3xl border border-dashed border-purple-200 p-6">
+            <p class="text-slate-500 font-medium text-sm">找不到符合條件的新聞文章。</p>
+          </div>
+        `;
+        return;
+      }
+
+      let html = '';
+      articles.forEach(art => {
+        const isZh = art.language === 'zh';
+        const isRead = art.isRead || false;
+        const snippet = art.body.substring(0, 95) + '...';
+
+        html += `
+          <div onclick="openArticleDetail('${art.id}')" class="bg-white rounded-2xl border ${isRead ? 'border-emerald-200/80 bg-emerald-50/10' : 'border-purple-100'} hover:border-purple-300 p-5 shadow-sm hover:shadow-md transition-all cursor-pointer flex flex-col justify-between group relative">
+            <div class="space-y-3">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-1.5">
+                  <span class="px-2.5 py-0.5 rounded-md text-[11px] font-extrabold uppercase ${isZh ? 'bg-purple-100 text-purple-800' : 'bg-blue-50 text-blue-600'}">
+                    ${isZh ? '繁體中文' : 'ENGLISH'}
+                  </span>
+                  ${isRead ? `
+                    <span class="px-2 py-0.5 rounded-md text-[11px] font-extrabold bg-emerald-100 text-emerald-800 flex items-center gap-1">
+                      <i class="fa-solid fa-circle-check text-[10px]"></i> 已閱讀
+                    </span>
+                  ` : `
+                    <span class="px-2 py-0.5 rounded-md text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200/60">
+                      未閱讀
+                    </span>
+                  `}
+                </div>
+
+                <span class="text-xs font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">${art.category || 'General'}</span>
+              </div>
+
+              <h3 class="font-extrabold text-slate-800 text-lg group-hover:text-brand-600 transition-colors leading-snug">
+                ${art.title}
+              </h3>
+              <p class="text-slate-600 text-xs md:text-sm line-clamp-3 leading-relaxed">
+                ${snippet}
+              </p>
+            </div>
+            <div class="pt-4 mt-2 border-t border-slate-100 flex items-center justify-between text-xs text-slate-400 font-medium">
+              <span>${art.date || 'Recent'}</span>
+              <span class="text-brand-600 font-bold group-hover:translate-x-1 transition-transform flex items-center gap-1">
+                閱讀全文 <i class="fa-solid fa-arrow-right text-[10px]"></i>
+              </span>
+            </div>
+          </div>
+        `;
+      });
+
+      grid.innerHTML = html;
+    }
+
+    function openArticleDetail(articleId) {
+      currentArticleId = articleId;
+      document.getElementById('articleGrid').classList.add('hidden');
+      document.getElementById('articleDetailView').classList.remove('hidden');
+
+      renderArticleDetail(articleId);
+      window.scrollTo({ top: 80, behavior: 'smooth' });
+    }
+
+    function closeArticleDetail() {
+      currentArticleId = null;
+      document.getElementById('articleGrid').classList.remove('hidden');
+      document.getElementById('articleDetailView').classList.add('hidden');
+      closePopover();
+      renderArticles();
+    }
+
+    function renderArticleDetail(articleId) {
+      const articles = getArticles();
+      const art = articles.find(a => a.id === articleId);
+      if (!art) return;
+
+      document.getElementById('readerTitle').textContent = art.title;
+      document.getElementById('readerLangBadge').textContent = art.language === 'zh' ? '繁體中文' : 'ENGLISH';
+      document.getElementById('readerLangBadge').className = `px-2.5 py-1 rounded-md text-xs font-extrabold uppercase ${art.language === 'zh' ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800'}`;
+      document.getElementById('readerCategoryBadge').textContent = art.category || 'General';
+      document.getElementById('readerDateBadge').textContent = art.date || '';
+
+      const readBadge = document.getElementById('readerReadBadge');
+      const toggleBtn = document.getElementById('toggleReadStatusBtn');
+      const toggleIcon = document.getElementById('toggleReadIcon');
+      const toggleText = document.getElementById('toggleReadText');
+
+      if (art.isRead) {
+        readBadge.classList.remove('hidden');
+        toggleBtn.className = 'px-3.5 py-2 rounded-xl text-sm font-bold flex items-center space-x-2 transition-all bg-emerald-600 text-white shadow-sm hover:bg-emerald-700';
+        toggleIcon.className = 'fa-solid fa-circle-check';
+        toggleText.textContent = '已閱讀 (點擊標記為未讀)';
+      } else {
+        readBadge.classList.add('hidden');
+        toggleBtn.className = 'px-3.5 py-2 rounded-xl text-sm font-bold flex items-center space-x-2 transition-all bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200';
+        toggleIcon.className = 'fa-regular fa-circle';
+        toggleText.textContent = '標記為已閱讀';
+      }
+
+      const imgContainer = document.getElementById('readerImageContainer');
+      const imgElem = document.getElementById('readerImg');
+      if (art.imageUrl) {
+        imgElem.src = art.imageUrl;
+        imgContainer.classList.remove('hidden');
+      } else {
+        imgContainer.classList.add('hidden');
+      }
+
+      // Render Stored Bookmarks onto HTML
+      const bookmarks = getBookmarks().filter(b => b.articleId === articleId);
+      let formattedBody = art.body;
+
+      const sortedBookmarks = [...bookmarks].sort((a, b) => b.text.length - a.text.length);
+
+      sortedBookmarks.forEach(bm => {
+        if (!bm.text) return;
+        const colorClass = `highlight-${bm.color || 'yellow'}`;
+        const regex = new RegExp(`(${escapeRegExp(bm.text)})`, 'gi');
+        formattedBody = formattedBody.replace(regex, `<mark class="custom-highlight ${colorClass}" title="${bm.note || ''}">$1</mark>`);
+      });
+
+      const paragraphs = formattedBody.split('\n\n').map(p => `<p class="leading-relaxed mb-4">${p.replace(/\n/g, '<br/>')}</p>`).join('');
+      
+      const readerBody = document.getElementById('readerBody');
+      readerBody.innerHTML = paragraphs;
+      readerBody.style.fontSize = `${currentFontSize}px`;
+    }
+
+    function toggleCurrentArticleReadStatus() {
+      if (!currentArticleId) return;
+      const articles = getArticles();
+      const art = articles.find(a => a.id === currentArticleId);
+      if (art) {
+        art.isRead = !art.isRead;
+        saveArticles(articles);
+        renderArticleDetail(currentArticleId);
+        showToast(art.isRead ? '已標記此文章為「已閱讀」！' : '已恢復為「未閱讀」');
+      }
+    }
+
+    function adjustFontSize(delta) {
+      currentFontSize = Math.min(Math.max(currentFontSize + delta, 14), 28);
+      document.getElementById('readerBody').style.fontSize = `${currentFontSize}px`;
+    }
+
+    function deleteCurrentArticle() {
+      if (!currentArticleId) return;
+      if (confirm('確定要刪除這篇文章嗎？')) {
+        let articles = getArticles();
+        articles = articles.filter(a => a.id !== currentArticleId);
+        saveArticles(articles);
+        closeArticleDetail();
+        showToast('文章已刪除');
+      }
+    }
+
+    /* -------------------------------------------------------------
+       REQUIREMENT: Native Touch Text Selection
+    ------------------------------------------------------------- */
+    let selectionTimeout = null;
+
+    function setupNativeSelectionListeners() {
+      const handleSelectionCheck = () => {
+        if (currentTab !== 'reader' || !currentArticleId) return;
+
+        if (selectionTimeout) clearTimeout(selectionTimeout);
+        selectionTimeout = setTimeout(() => {
+          checkAndShowPopover();
+        }, 120);
+      };
+
+      document.addEventListener('touchend', handleSelectionCheck);
+      document.addEventListener('mouseup', handleSelectionCheck);
+      document.addEventListener('selectionchange', handleSelectionCheck);
+    }
+
+    function checkAndShowPopover() {
+      const selection = window.getSelection();
+      if (!selection || selection.isCollapsed) {
+        const activeEl = document.activeElement;
+        const popover = document.getElementById('highlightPopover');
+        if (!popover.contains(activeEl)) {
+          closePopover();
+        }
+        return;
+      }
+
+      const text = selection.toString().trim();
+      if (text.length > 0 && text.length < 300) {
+        const readerBody = document.getElementById('readerBody');
+        
+        if (selection.rangeCount > 0) {
+          const range = selection.getRangeAt(0);
+          
+          if (readerBody.contains(range.commonAncestorContainer)) {
+            savedSelectionRange = range.cloneRange();
+            selectedHighlightText = text;
+
+            const rect = range.getBoundingClientRect();
+            if (rect.width > 0 && rect.height > 0) {
+              const x = rect.left + (rect.width / 2);
+              const y = rect.top;
+              showPopover(x, y, text);
+            }
+          }
+        }
+      }
+    }
+
+    function showPopover(x, y, text) {
+      const popover = document.getElementById('highlightPopover');
+      document.getElementById('selectedTextPreview').textContent = `"${text}"`;
+      
+      const windowWidth = window.innerWidth;
+      const safeX = Math.min(Math.max(x, 165), windowWidth - 165);
+      
+      const pageY = y + window.scrollY;
+      const popoverHeight = 135;
+      const safeY = Math.max(pageY - popoverHeight - 12, window.scrollY + 10);
+
+      popover.style.left = `${safeX}px`;
+      popover.style.top = `${safeY}px`;
+      popover.classList.remove('hidden');
+    }
+
+    function selectHighlightColor(colorName) {
+      selectedHighlightColor = colorName;
+      
+      const colors = ['red', 'orange', 'yellow', 'green', 'cyan', 'blue', 'purple', 'pink'];
+      colors.forEach(c => {
+        const btn = document.getElementById(`colorBtn-${c}`);
+        if (btn) {
+          if (c === colorName) {
+            btn.classList.add('ring-2', 'ring-white', 'scale-110');
+          } else {
+            btn.classList.remove('ring-2', 'ring-white', 'scale-110');
+          }
+        }
+      });
+    }
+
+    function closePopover() {
+      const popover = document.getElementById('highlightPopover');
+      if (popover) popover.classList.add('hidden');
+    }
+
+    /* -------------------------------------------------------------
+       REQUIREMENTS 1, 2, 3: Enhanced Languages, Dictionary & Dual Speech
+    ------------------------------------------------------------- */
+    function saveSelectedHighlight(type) {
+      selectedHighlightType = type;
+      closePopover();
+
+      const isChineseText = containsChinese(selectedHighlightText);
+      const modal = document.getElementById('bookmarkModal');
+      document.getElementById('modalTitle').textContent = type === 'word' ? '新增至生字庫 Vocabulary' : '新增至詞組庫 Phrase';
+      document.getElementById('modalSelectedText').textContent = selectedHighlightText;
+      
+      const langBadge = document.getElementById('modalLangTypeBadge');
+      const pinyinGroup = document.getElementById('pinyinFieldGroup');
+      const defLabel = document.getElementById('modalDefLabel');
+
+      if (isChineseText) {
+        langBadge.textContent = '繁體中文 CHINESE';
+        langBadge.className = 'text-[10px] font-extrabold px-2 py-0.5 rounded bg-purple-100 text-purple-800';
+        pinyinGroup.classList.remove('hidden');
+        defLabel.textContent = '英文釋義與註解 English Definition & Notes';
+      } else {
+        langBadge.textContent = 'ENGLISH';
+        langBadge.className = 'text-[10px] font-extrabold px-2 py-0.5 rounded bg-blue-100 text-blue-800';
+        pinyinGroup.classList.add('hidden');
+        defLabel.textContent = '繁體中文釋義與註解 Traditional Chinese Definition';
+      }
+
+      // Configure Modal Audio Pronunciation Preview Buttons
+      setupModalAudioButtons(selectedHighlightText, isChineseText);
+
+      // Auto Lookup Definition
+      autoLookupDefinition();
+
+      const colorBadge = document.getElementById('modalColorBadge');
+      colorBadge.className = `w-5 h-5 rounded-full shadow-sm shrink-0 ml-2 highlight-${selectedHighlightColor}`;
+
+      modal.classList.remove('hidden');
+    }
+
+    function setupModalAudioButtons(text, isChinese) {
+      const container = document.getElementById('modalAudioButtons');
+      const cleanText = text.replace(/'/g, "\\'");
+
+      if (isChinese) {
+        container.innerHTML = `
+          <button type="button" onclick="speakSpeech('${cleanText}', 'cantonese')" class="px-3 py-1.5 rounded-lg bg-purple-100 hover:bg-purple-200 text-purple-800 font-bold text-xs flex items-center space-x-1">
+            <i class="fa-solid fa-volume-high text-brand-600"></i>
+            <span>🔊 廣東話 Cantonese</span>
+          </button>
+          <button type="button" onclick="speakSpeech('${cleanText}', 'mandarin')" class="px-3 py-1.5 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-900 font-bold text-xs flex items-center space-x-1">
+            <i class="fa-solid fa-volume-high text-amber-600"></i>
+            <span>🔊 普通話 Mandarin</span>
+          </button>
+        `;
+      } else {
+        container.innerHTML = `
+          <button type="button" onclick="speakSpeech('${cleanText}', 'english')" class="px-3 py-1.5 rounded-lg bg-blue-100 hover:bg-blue-200 text-blue-800 font-bold text-xs flex items-center space-x-1">
+            <i class="fa-solid fa-volume-high text-blue-600"></i>
+            <span>🔊 English Pronunciation</span>
+          </button>
+          <button type="button" id="modalAudioMeaningCantoneseBtn" onclick="speakDefinitionAudio('cantonese')" class="px-3 py-1.5 rounded-lg bg-purple-100 hover:bg-purple-200 text-purple-800 font-bold text-xs flex items-center space-x-1">
+            <i class="fa-solid fa-volume-high text-brand-600"></i>
+            <span>🔊 中文釋義 (廣東話)</span>
+          </button>
+          <button type="button" id="modalAudioMeaningMandarinBtn" onclick="speakDefinitionAudio('mandarin')" class="px-3 py-1.5 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-900 font-bold text-xs flex items-center space-x-1">
+            <i class="fa-solid fa-volume-high text-amber-600"></i>
+            <span>🔊 中文釋義 (普通話)</span>
+          </button>
+        `;
+      }
+    }
+
+    function speakDefinitionAudio(accent) {
+      const noteText = document.getElementById('modalNote').value.trim();
+      if (!noteText) {
+        showToast('請先填寫或查出中文釋義');
+        return;
+      }
+      speakSpeech(noteText, accent);
+    }
+
+    async function autoLookupDefinition() {
+      const text = selectedHighlightText.trim().toLowerCase();
+      const isChinese = containsChinese(text);
+
+      document.getElementById('modalNote').value = '正在檢索字典...';
+
+      // 1. Check offline built-in dictionary
+      if (builtInDictionary[text]) {
+        if (isChinese) {
+          document.getElementById('modalNote').value = builtInDictionary[text].en;
+          document.getElementById('modalPinyin').value = builtInDictionary[text].pinyin;
+        } else {
+          document.getElementById('modalNote').value = builtInDictionary[text];
+        }
+        return;
+      }
+
+      // 2. Fetch from online API for English words
+      if (!isChinese) {
+        try {
+          const res = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(text)}`);
+          if (res.ok) {
+            const data = await res.json();
+            const firstDef = data[0]?.meanings[0]?.definitions[0]?.definition;
+            if (firstDef) {
+              document.getElementById('modalNote').value = `[EN] ${firstDef}`;
+              return;
+            }
+          }
+        } catch (e) {
+          console.log('Online dict lookup fallback');
+        }
+      }
+
+      // Fallback
+      if (isChinese) {
+        document.getElementById('modalNote').value = '';
+        document.getElementById('modalPinyin').value = '';
+      } else {
+        document.getElementById('modalNote').value = '';
+      }
+    }
+
+    /* Speech Synthesis Function with Voice Fallbacks */
+    function speakSpeech(text, accent) {
+      if (!('speechSynthesis' in window)) {
+        showToast('您的瀏覽器或裝置不支援語音朗讀功能');
+        return;
+      }
+
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      const voices = window.speechSynthesis.getVoices();
+
+      if (accent === 'cantonese') {
+        utterance.lang = 'zh-HK';
+        const cantoneseVoice = voices.find(v => v.lang.includes('zh-HK') || v.lang.includes('yue') || v.name.includes('Hong Kong') || v.name.includes('Cantonese'));
+        if (cantoneseVoice) utterance.voice = cantoneseVoice;
+      } else if (accent === 'mandarin') {
+        utterance.lang = 'zh-CN';
+        const mandarinVoice = voices.find(v => v.lang.includes('zh-CN') || v.lang.includes('zh-TW') || v.name.includes('Mandarin') || v.name.includes('Putonghua') || v.name.includes('Mei-Jia'));
+        if (mandarinVoice) utterance.voice = mandarinVoice;
+      } else {
+        utterance.lang = 'en-US';
+        const englishVoice = voices.find(v => v.lang.includes('en-US') || v.lang.includes('en-GB') || v.name.includes('Samantha') || v.name.includes('Alex') || v.name.includes('Google US English'));
+        if (englishVoice) utterance.voice = englishVoice;
+      }
+
+      utterance.rate = 0.85;
+      window.speechSynthesis.speak(utterance);
+    }
+
+    function closeBookmarkModal() {
+      document.getElementById('bookmarkModal').classList.add('hidden');
+    }
+
+    function confirmSaveBookmark() {
+      if (!selectedHighlightText) return;
+
+      const isChineseText = containsChinese(selectedHighlightText);
+      const lang = isChineseText ? 'zh' : 'en';
+
+      const newBookmark = {
+        id: 'bm-' + Date.now(),
+        text: selectedHighlightText,
+        type: selectedHighlightType,
+        color: selectedHighlightColor,
+        language: lang,
+        articleId: currentArticleId,
+        pinyin: isChineseText ? document.getElementById('modalPinyin').value.trim() : '',
+        note: document.getElementById('modalNote').value.trim(),
+        mastered: false,
+        date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+      };
+
+      const bookmarks = getBookmarks();
+      bookmarks.unshift(newBookmark);
+      saveBookmarks(bookmarks);
+
+      closeBookmarkModal();
+      showToast(`已成功劃線並儲存至${selectedHighlightType === 'word' ? '生字' : '詞組'}庫！`);
+    }
+
+    // Vocabulary & Phrase Type Switcher
+    function setVocabType(type) {
+      currentVocabType = type;
+      const wordsBtn = document.getElementById('vocabType-words');
+      const phrasesBtn = document.getElementById('vocabType-phrases');
+
+      if (type === 'words') {
+        wordsBtn.className = 'flex-1 md:flex-initial px-5 py-2 rounded-lg text-sm font-bold bg-white text-slate-800 shadow-sm flex items-center justify-center space-x-2';
+        phrasesBtn.className = 'flex-1 md:flex-initial px-5 py-2 rounded-lg text-sm font-bold text-slate-600 hover:text-slate-800 flex items-center justify-center space-x-2';
+      } else {
+        phrasesBtn.className = 'flex-1 md:flex-initial px-5 py-2 rounded-lg text-sm font-bold bg-white text-slate-800 shadow-sm flex items-center justify-center space-x-2';
+        wordsBtn.className = 'flex-1 md:flex-initial px-5 py-2 rounded-lg text-sm font-bold text-slate-600 hover:text-slate-800 flex items-center justify-center space-x-2';
+      }
+
+      renderBookmarks();
+    }
+
+    // Mastery Tab Switcher
+    function setMasteryTab(tab) {
+      currentMasteryTab = tab;
+      const learningBtn = document.getElementById('masteryTab-learning');
+      const masteredBtn = document.getElementById('masteryTab-mastered');
+
+      if (tab === 'learning') {
+        learningBtn.className = 'flex-1 md:flex-initial px-4 py-1.5 rounded-lg text-xs md:text-sm font-extrabold bg-brand-600 text-white shadow-sm flex items-center justify-center space-x-1.5';
+        masteredBtn.className = 'flex-1 md:flex-initial px-4 py-1.5 rounded-lg text-xs md:text-sm font-extrabold text-slate-600 hover:text-brand-800 flex items-center justify-center space-x-1.5';
+      } else {
+        masteredBtn.className = 'flex-1 md:flex-initial px-4 py-1.5 rounded-lg text-xs md:text-sm font-extrabold bg-emerald-600 text-white shadow-sm flex items-center justify-center space-x-1.5';
+        learningBtn.className = 'flex-1 md:flex-initial px-4 py-1.5 rounded-lg text-xs md:text-sm font-extrabold text-slate-600 hover:text-brand-800 flex items-center justify-center space-x-1.5';
+      }
+
+      renderBookmarks();
+    }
+
+    function renderBookmarks() {
+      const container = document.getElementById('bookmarksList');
+      const emptyState = document.getElementById('emptyVocabState');
+      const allBookmarks = getBookmarks();
+
+      const words = allBookmarks.filter(b => b.type === 'word');
+      const phrases = allBookmarks.filter(b => b.type === 'phrase');
+
+      const learningItems = allBookmarks.filter(b => !b.mastered);
+      const masteredItems = allBookmarks.filter(b => b.mastered);
+
+      document.getElementById('bookmarkCountBadge').textContent = allBookmarks.length;
+      document.getElementById('wordCountBadge').textContent = words.length;
+      document.getElementById('phraseCountBadge').textContent = phrases.length;
+      
+      document.getElementById('learningCountBadge').textContent = learningItems.length;
+      document.getElementById('masteredCountBadge').textContent = masteredItems.length;
+
+      const filteredList = allBookmarks.filter(b => {
+        const matchesType = (currentVocabType === 'words' && b.type === 'word') || (currentVocabType === 'phrases' && b.type === 'phrase');
+        const matchesMastery = (currentMasteryTab === 'learning' && !b.mastered) || (currentMasteryTab === 'mastered' && b.mastered);
+        return matchesType && matchesMastery;
+      });
+
+      if (filteredList.length === 0) {
+        container.innerHTML = '';
+        emptyState.classList.remove('hidden');
+        if (currentMasteryTab === 'learning') {
+          document.getElementById('emptyStateTitle').textContent = `暫無「學習中」的${currentVocabType === 'words' ? '生字' : '詞組'}`;
+          document.getElementById('emptyStateSub').textContent = '好棒！你目前沒有需要複習的生字或詞組。';
+        } else {
+          document.getElementById('emptyStateTitle').textContent = `暫無「已學會」的${currentVocabType === 'words' ? '生字' : '詞組'}`;
+          document.getElementById('emptyStateSub').textContent = '只要在學習中清單點選「標示為已學會」，就會在這裡顯示囉！';
+        }
+        return;
+      }
+
+      emptyState.classList.add('hidden');
+      let html = '';
+
+      filteredList.forEach(bm => {
+        const isChinese = containsChinese(bm.text) || bm.language === 'zh';
+        const colorClass = `highlight-${bm.color || 'yellow'}`;
+        const cleanText = bm.text.replace(/'/g, "\\'");
+        const cleanNote = (bm.note || '').replace(/'/g, "\\'");
+
+        html += `
+          <div class="bg-white rounded-2xl border ${bm.mastered ? 'border-emerald-200 bg-emerald-50/20' : 'border-purple-100'} p-5 shadow-sm hover:shadow-md transition-all flex flex-col justify-between space-y-3">
+            <div class="space-y-2">
+              <div class="flex items-center justify-between">
+                <span class="px-2 py-0.5 rounded text-[10px] font-extrabold uppercase ${isChinese ? 'bg-purple-100 text-purple-800' : 'bg-blue-50 text-blue-600'}">
+                  ${isChinese ? '繁體中文 CHINESE' : 'ENGLISH'}
+                </span>
+                <span class="w-3.5 h-3.5 rounded-full ${colorClass}"></span>
+              </div>
+
+              <div class="flex items-baseline space-x-2">
+                <h4 class="font-extrabold text-xl text-slate-800 break-words">${bm.text}</h4>
+                ${bm.pinyin ? `<span class="text-xs font-bold text-brand-700 bg-purple-50 px-2 py-0.5 rounded-md border border-purple-200">${bm.pinyin}</span>` : ''}
+              </div>
+
+              <!-- Audio Action Bar with Dual Speech Buttons -->
+              <div class="p-2.5 bg-purple-50/60 rounded-xl border border-purple-100 flex flex-wrap gap-2 items-center">
+                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block w-full">語音朗讀 Pronunciation:</span>
+                
+                ${isChinese ? `
+                  <button onclick="speakSpeech('${cleanText}', 'cantonese')" class="px-2.5 py-1 rounded-lg bg-white border border-purple-200 text-purple-900 font-bold text-xs flex items-center space-x-1 shadow-sm hover:bg-purple-100">
+                    <i class="fa-solid fa-volume-high text-brand-600"></i>
+                    <span>🔊 廣東話</span>
+                  </button>
+                  <button onclick="speakSpeech('${cleanText}', 'mandarin')" class="px-2.5 py-1 rounded-lg bg-white border border-amber-200 text-amber-900 font-bold text-xs flex items-center space-x-1 shadow-sm hover:bg-amber-100">
+                    <i class="fa-solid fa-volume-high text-amber-600"></i>
+                    <span>🔊 普通話</span>
+                  </button>
+                ` : `
+                  <button onclick="speakSpeech('${cleanText}', 'english')" class="px-2.5 py-1 rounded-lg bg-white border border-blue-200 text-blue-900 font-bold text-xs flex items-center space-x-1 shadow-sm hover:bg-blue-100">
+                    <i class="fa-solid fa-volume-high text-blue-600"></i>
+                    <span>🔊 English</span>
+                  </button>
+                  ${bm.note ? `
+                    <button onclick="speakSpeech('${cleanNote}', 'cantonese')" class="px-2.5 py-1 rounded-lg bg-white border border-purple-200 text-purple-900 font-bold text-xs flex items-center space-x-1 shadow-sm hover:bg-purple-100" title="朗讀中文釋義(廣東話)">
+                      <i class="fa-solid fa-volume-high text-brand-600"></i>
+                      <span>🔊 釋義(廣東話)</span>
+                    </button>
+                    <button onclick="speakSpeech('${cleanNote}', 'mandarin')" class="px-2.5 py-1 rounded-lg bg-white border border-amber-200 text-amber-900 font-bold text-xs flex items-center space-x-1 shadow-sm hover:bg-amber-100" title="朗讀中文釋義(普通話)">
+                      <i class="fa-solid fa-volume-high text-amber-600"></i>
+                      <span>🔊 釋義(普通話)</span>
+                    </button>
+                  ` : ''}
+                `}
+              </div>
+
+              ${bm.note ? `<p class="text-xs md:text-sm text-slate-700 font-medium leading-relaxed bg-slate-50 p-2.5 rounded-xl border border-slate-100">${bm.note}</p>` : ''}
+            </div>
+
+            <div class="pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
+              <button onclick="toggleMastered('${bm.id}')" class="px-3 py-1.5 rounded-xl font-bold transition-all flex items-center space-x-1.5 ${bm.mastered ? 'bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100' : 'bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100'}">
+                <i class="${bm.mastered ? 'fa-solid fa-rotate-left' : 'fa-solid fa-check'}"></i>
+                <span>${bm.mastered ? '移回「學習中」' : '標示為已學會 🎉'}</span>
+              </button>
+
+              <button onclick="deleteBookmark('${bm.id}')" class="text-slate-400 hover:text-rose-500 p-1" title="刪除紀錄">
+                <i class="fa-solid fa-trash-can"></i>
+              </button>
+            </div>
+          </div>
+        `;
+      });
+
+      container.innerHTML = html;
+    }
+
+    function toggleMastered(id) {
+      const bookmarks = getBookmarks();
+      const bm = bookmarks.find(b => b.id === id);
+      if (bm) {
+        bm.mastered = !bm.mastered;
+        saveBookmarks(bookmarks);
+        showToast(bm.mastered ? '已移至「已學會」分頁！' : '已移回「學習中」清單');
+      }
+    }
+
+    function deleteBookmark(id) {
+      let bookmarks = getBookmarks();
+      bookmarks = bookmarks.filter(b => b.id !== id);
+      saveBookmarks(bookmarks);
+      showToast('紀錄已刪除');
+    }
+
+    function speakFullArticle() {
+      if (!currentArticleId) return;
+      const articles = getArticles();
+      const art = articles.find(a => a.id === currentArticleId);
+      if (art) {
+        speakSpeech(`${art.title}. ${art.body}`, art.language === 'zh' ? 'cantonese' : 'english');
+      }
+    }
+
+    // OCR Processing via Tesseract.js & OpenCC
+    async function processImageOCR(input) {
+      if (!input.files || !input.files[0]) return;
+      const file = input.files[0];
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        document.getElementById('imagePreview').src = e.target.result;
+        document.getElementById('imagePreviewBox').classList.remove('hidden');
+      };
+      reader.readAsDataURL(file);
+
+      const progressArea = document.getElementById('ocrProgressArea');
+      const progressBar = document.getElementById('ocrProgressBar');
+      const percentText = document.getElementById('ocrPercent');
+      const statusText = document.getElementById('ocrStatusText');
+
+      progressArea.classList.remove('hidden');
+      progressBar.style.width = '0%';
+      percentText.textContent = '0%';
+
+      const selectedLang = document.getElementById('inputLanguage').value;
+      const tesseractLang = selectedLang === 'zh' ? 'chi_tra+chi_sim' : 'eng';
+
+      try {
+        statusText.innerHTML = `<i class="fa-solid fa-spinner fa-spin mr-1"></i> 正進行光學辨識與繁體轉換中...`;
+        
+        const worker = await Tesseract.createWorker(tesseractLang);
+        const ret = await worker.recognize(file);
+        let extractedText = ret.data.text;
+
+        if (selectedLang === 'zh') {
+          extractedText = convertToTraditional(extractedText);
+        }
+
+        document.getElementById('inputBody').value = extractedText;
+        await worker.terminate();
+
+        progressBar.style.width = '100%';
+        percentText.textContent = '100%';
+        statusText.innerHTML = `<i class="fa-solid fa-circle-check text-emerald-600 mr-1"></i> 辨識成功並已自動轉換為繁體字！`;
+        showToast('圖片文字提取成功');
+      } catch (err) {
+        console.error(err);
+        statusText.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-amber-600 mr-1"></i> 辨識完成，您可於下方隨時修改內文。`;
+        showToast('圖片已載入');
+      }
+    }
+
+    // Article Submission Handler
+    function handleArticleSubmit(e) {
+      e.preventDefault();
+
+      const title = document.getElementById('inputTitle').value.trim();
+      const lang = document.getElementById('inputLanguage').value;
+      let category = document.getElementById('inputCategorySelect').value;
+      const customCategory = document.getElementById('inputCustomCategory').value.trim();
+      let body = document.getElementById('inputBody').value.trim();
+      const imgSrc = document.getElementById('imagePreview').src || '';
+
+      if (category === '+new') {
+        if (customCategory) {
+          category = customCategory;
+          addCategory(customCategory);
+        } else {
+          category = '自訂新聞 General';
+        }
+      }
+
+      if (lang === 'zh') {
+        body = convertToTraditional(body);
+      }
+
+      const newArticle = {
+        id: 'art-' + Date.now(),
+        title: title,
+        language: lang,
+        category: category,
+        date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+        body: body,
+        imageUrl: imgSrc.startsWith('data:image') ? imgSrc : '',
+        isRead: false
+      };
+
+      const articles = getArticles();
+      articles.unshift(newArticle);
+      saveArticles(articles);
+
+      document.getElementById('uploadArticleForm').reset();
+      document.getElementById('imagePreviewBox').classList.add('hidden');
+      document.getElementById('ocrProgressArea').classList.add('hidden');
+
+      showToast('新文章已成功儲存並發佈！');
+      switchTab('reader');
+      openArticleDetail(newArticle.id);
+    }
+
+    function escapeRegExp(string) {
+      return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
+    function showToast(message) {
+      const toast = document.getElementById('toast');
+      const toastMsg = document.getElementById('toastMsg');
+      toastMsg.textContent = message;
+      toast.classList.remove('translate-y-20', 'opacity-0');
+      setTimeout(() => {
+        toast.classList.add('translate-y-20', 'opacity-0');
+      }, 2500);
+    }
+  </script>
+</body>
+</html>
